@@ -70,13 +70,13 @@ export async function saveTechIntervention(
 
   const times = resolveTaskTimeRange({
     start: formStart ?? access.task.start_time ?? null,
-    end: formEnd,
+    end: formEnd ?? access.task.end_time ?? null,
     completing,
   });
 
   if (!times.ok) return times;
 
-  // Estado: fim preenchido (ou concluir) → concluída; senão mantém / em curso
+  // Estado: com fim → concluída; com início → em curso; senão agendada
   let status: TaskStatus = access.task.status as TaskStatus;
   if (completing || times.end_time) {
     if (!times.start_time) {
@@ -85,20 +85,34 @@ export async function saveTechIntervention(
         error: "Indica a data/hora de início antes de concluir.",
       };
     }
+    if (completing && !times.end_time) {
+      return {
+        ok: false,
+        error: "Indica a data/hora de fim para concluir.",
+      };
+    }
     status = "completed";
-  } else if (status === "scheduled" && times.start_time) {
+  } else if (times.start_time) {
     status = "in_progress";
+  } else if (status === "completed" || status === "in_progress") {
+    // Correção: sem início/fim volta a agendada
+    status = "scheduled";
   }
+
+  const rawDuration = durationMinutesBetween(
+    times.start_time,
+    times.end_time,
+  );
+  // Constraint na BD: duration_minutes > 0 (mínimo 1 min se início=fim)
+  const duration_minutes =
+    rawDuration == null ? null : Math.max(1, rawDuration);
 
   const payload = {
     report_notes: emptyToNull(formData.get("report_notes")),
     description: emptyToNull(formData.get("description")),
     start_time: times.start_time,
     end_time: times.end_time,
-    duration_minutes: durationMinutesBetween(
-      times.start_time,
-      times.end_time,
-    ),
+    duration_minutes,
     status,
   };
 

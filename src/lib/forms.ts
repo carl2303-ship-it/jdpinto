@@ -123,7 +123,8 @@ export function formatScheduledDate(value: string | null | undefined) {
 
 /** Ex.: 90 → "1h 30m"; 45 → "45 min" */
 export function formatDurationMinutes(minutes: number | null | undefined) {
-  if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return "—";
+  if (minutes == null || !Number.isFinite(minutes) || minutes < 0) return "—";
+  if (minutes === 0) return "< 1 min";
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   if (h === 0) return `${m} min`;
@@ -131,7 +132,7 @@ export function formatDurationMinutes(minutes: number | null | undefined) {
   return `${h}h ${m}min`;
 }
 
-/** Minutos entre início e fim (arredondados). */
+/** Minutos entre início e fim (arredondados; 0 se for o mesmo minuto). */
 export function durationMinutesBetween(
   startIso: string | null | undefined,
   endIso: string | null | undefined,
@@ -140,8 +141,7 @@ export function durationMinutesBetween(
   const start = new Date(startIso).getTime();
   const end = new Date(endIso).getTime();
   if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
-  const mins = Math.round((end - start) / 60000);
-  return mins > 0 ? mins : null;
+  return Math.round((end - start) / 60000);
 }
 
 export function formatTime24(value: string | null) {
@@ -154,8 +154,9 @@ export function formatTime24(value: string | null) {
 }
 
 /**
- * Garante end >= start. Em conclusão: fim = agora;
- * se o início estiver no futuro ou vazio, alinha o início ao fim.
+ * Garante end >= start.
+ * Em conclusão: usa o fim do formulário; se faltar, usa agora.
+ * Nunca altera o início para igualar o fim — exige início válido.
  */
 export function resolveTaskTimeRange(opts: {
   start: string | null;
@@ -168,12 +169,14 @@ export function resolveTaskTimeRange(opts: {
   let end_time = opts.end;
 
   if (opts.completing) {
-    end_time = new Date().toISOString();
-    if (
-      !start_time ||
-      new Date(start_time).getTime() > new Date(end_time).getTime()
-    ) {
-      start_time = end_time;
+    if (!end_time) {
+      end_time = new Date().toISOString();
+    }
+    if (!start_time) {
+      return {
+        ok: false,
+        error: "Indica a data/hora de início antes de concluir.",
+      };
     }
   }
 

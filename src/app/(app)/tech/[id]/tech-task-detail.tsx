@@ -279,7 +279,7 @@ export function TechTaskDetail({ task, photos }: Props) {
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="submit"
-                disabled={savePending || task.status === "completed"}
+                disabled={savePending}
                 className="flex-1"
                 onClick={() => {
                   const el = document.getElementById(
@@ -290,7 +290,7 @@ export function TechTaskDetail({ task, photos }: Props) {
               >
                 {savePending ? "A guardar…" : "Guardar detalhes"}
               </Button>
-              {task.status !== "completed" && (
+              {task.status !== "completed" ? (
                 <Button
                   type="submit"
                   variant="success"
@@ -306,6 +306,11 @@ export function TechTaskDetail({ task, photos }: Props) {
                   <CheckCircle2 className="h-4 w-4" />
                   Concluir tarefa
                 </Button>
+              ) : (
+                <p className="flex flex-1 items-center text-xs text-slate-500 sm:justify-end">
+                  Concluída — podes corrigir horários, relatório ou fotos e
+                  guardar.
+                </p>
               )}
             </div>
           </form>
