@@ -21,16 +21,13 @@ Saída em `dist/` (configurada em `netlify.toml`).
 
 ## Netlify
 
-1. Liga o site ao repositório GitHub `carl2303-ship-it/jdpinto` no [dashboard Netlify](https://app.netlify.com/) **ou** via CLI:
+- **Site:** https://jdpinto-948.netlify.app  
+- **Dashboard:** https://app.netlify.com/projects/jdpinto-948  
+- **Repo:** https://github.com/carl2303-ship-it/jdpinto  
 
-```bash
-npx netlify login
-npx netlify init
-```
+Push para `main` dispara build (`npm run build`) e publica `dist/`.
 
-2. Em cada push para a branch de produção, a Netlify faz build (`npm run build`) e publica `dist/`.
-
-3. Deploy manual (opcional):
+Deploy manual:
 
 ```bash
 npx netlify deploy --prod
