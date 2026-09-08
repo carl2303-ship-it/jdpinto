@@ -2,11 +2,22 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getMyCollaborator, isOfficeRole } from "@/lib/auth";
 import type { Client, Task, TaskPhoto } from "@/types/database";
+import { formatClientAddress } from "@/lib/forms";
 import { TechTaskDetail } from "./tech-task-detail";
 
 type Props = { params: Promise<{ id: string }> };
 
-type ClientInfo = Pick<Client, "id" | "name" | "phone" | "address">;
+type ClientInfo = Pick<
+  Client,
+  | "id"
+  | "name"
+  | "phone"
+  | "address"
+  | "street"
+  | "postal_code"
+  | "locality"
+  | "contact_name"
+>;
 
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
@@ -49,7 +60,9 @@ export default async function TechTaskPage({ params }: Props) {
   if (row.client_id) {
     const { data: clientRow } = await supabase
       .from("clients")
-      .select("id, name, phone, address")
+      .select(
+        "id, name, phone, address, street, postal_code, locality, contact_name",
+      )
       .eq("id", row.client_id)
       .maybeSingle();
     client = (clientRow as ClientInfo | null) ?? null;
@@ -57,7 +70,8 @@ export default async function TechTaskPage({ params }: Props) {
 
   const displayTask: Task & { client: ClientInfo | null } = {
     ...row,
-    address: row.address || client?.address || null,
+    address: row.address || formatClientAddress(client) || null,
+    contact_name: row.contact_name || client?.contact_name || null,
     contact_phone: row.contact_phone || client?.phone || null,
     client,
   };

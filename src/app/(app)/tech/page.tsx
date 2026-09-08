@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDateTime } from "@/lib/forms";
+import { formatDateTime, formatDurationMinutes, formatScheduledDate } from "@/lib/forms";
 
 export const metadata = { title: "As minhas tarefas" };
 
@@ -42,7 +42,7 @@ export default async function TechDashboardPage() {
     .from("tasks")
     .select("*")
     .neq("status", "cancelled")
-    .order("start_time", { ascending: true, nullsFirst: false });
+    .order("scheduled_date", { ascending: true, nullsFirst: false });
 
   if (!isOfficeRole(me.role)) {
     const filters = [`assigned_collaborator_id.eq.${me.id}`];
@@ -116,7 +116,13 @@ export default async function TechDashboardPage() {
                       <CardTitle className="text-base">{task.title}</CardTitle>
                       <CardDescription>
                         {task.clients?.name ?? "Sem cliente"} ·{" "}
-                        {formatDateTime(task.start_time)}
+                        {formatScheduledDate(task.scheduled_date)}
+                        {task.duration_minutes
+                          ? ` · ${formatDurationMinutes(task.duration_minutes)}`
+                          : ""}
+                        {task.start_time
+                          ? ` · ${formatDateTime(task.start_time)}`
+                          : ""}
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">

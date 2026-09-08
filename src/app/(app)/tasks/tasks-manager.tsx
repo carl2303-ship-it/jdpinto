@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   Client,
@@ -27,9 +27,10 @@ import {
 } from "@/components/ui/card";
 import {
   formatDateTime,
+  formatDurationMinutes,
+  formatScheduledDate,
   mapsUrl,
 } from "@/lib/forms";
-import { DateTime24Fields } from "@/components/ui/date-time-24";
 import { createClientQuick } from "@/app/(app)/clients/actions";
 import { deleteTask, upsertTask, type ActionResult } from "./actions";
 
@@ -85,7 +86,11 @@ function TaskFormFields({
       name: quickName.trim(),
       email: null,
       phone: null,
+      contact_name: null,
       address: null,
+      street: null,
+      postal_code: null,
+      locality: null,
       vat_number: null,
       notes: null,
       created_at: new Date().toISOString(),
@@ -190,20 +195,79 @@ function TaskFormFields({
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <DateTime24Fields
-          label="Início"
-          dateName="start_date"
-          timeName="start_time"
-          value={task?.start_time}
+      <div className="space-y-1.5">
+        <Label htmlFor="scheduled_date">Data agendada *</Label>
+        <Input
+          id="scheduled_date"
+          name="scheduled_date"
+          type="date"
+          required
+          defaultValue={task?.scheduled_date ?? ""}
         />
-        <DateTime24Fields
-          label="Fim"
-          dateName="end_date"
-          timeName="end_time"
-          value={task?.end_time}
-        />
+        <p className="text-xs text-slate-500">
+          O técnico preenche depois a hora de início e de fim no local.
+        </p>
       </div>
+
+      <div className="space-y-1.5">
+        <Label>Duração da intervenção</Label>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label
+              htmlFor="duration_hours"
+              className="text-xs font-normal text-slate-500"
+            >
+              Horas
+            </Label>
+            <Input
+              id="duration_hours"
+              name="duration_hours"
+              type="number"
+              min={0}
+              max={48}
+              step={1}
+              placeholder="0"
+              defaultValue={
+                task?.duration_minutes != null
+                  ? Math.floor(task.duration_minutes / 60)
+                  : ""
+              }
+            />
+          </div>
+          <div className="space-y-1">
+            <Label
+              htmlFor="duration_mins"
+              className="text-xs font-normal text-slate-500"
+            >
+              Minutos
+            </Label>
+            <Input
+              id="duration_mins"
+              name="duration_mins"
+              type="number"
+              min={0}
+              max={59}
+              step={5}
+              placeholder="0"
+              defaultValue={
+                task?.duration_minutes != null
+                  ? task.duration_minutes % 60
+                  : ""
+              }
+            />
+          </div>
+        </div>
+      </div>
+
+      {(task?.start_time || task?.end_time) && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          <p className="font-medium text-brand-navy">Registo do técnico</p>
+          <p>
+            Início: {formatDateTime(task.start_time ?? null)}
+            {task.end_time ? ` · Fim: ${formatDateTime(task.end_time)}` : ""}
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
@@ -243,7 +307,7 @@ function TaskFormFields({
         <Select
           id="status"
           name="status"
-          defaultValue={task?.status ?? "pending"}
+          defaultValue={task?.status ?? "scheduled"}
         >
           {(Object.keys(TASK_STATUS_LABELS) as TaskStatus[]).map((s) => (
             <option key={s} value={s}>
@@ -263,6 +327,7 @@ export function TasksManager({
   collaborators,
 }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [clients, setClients] = useState(initialClients);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
@@ -275,9 +340,43 @@ export function TasksManager({
   }, [initialClients]);
 
   useEffect(() => {
+    const editId = searchParams.get("edit");
+    const wantNew = searchParams.get("new") === "1";
+
+    if (editId) {
+      const task = tasks.find((t) => t.id === editId) ?? null;
+      if (task) {
+        setEditing(task);
+        setOpen(true);
+      }
+      return;
+    }
+
+    if (wantNew) {
+      setEditing(null);
+      setOpen(true);
+    }
+  }, [searchParams, tasks]);
+
+  function clearDeepLink() {
+    const editId = searchParams.get("edit");
+    const wantNew = searchParams.get("new") === "1";
+    if (editId || wantNew) {
+      router.replace("/tasks", { scroll: false });
+    }
+  }
+
+  function closeDialog() {
+    setOpen(false);
+    setEditing(null);
+    clearDeepLink();
+  }
+
+  useEffect(() => {
     if (state?.ok) {
       setOpen(false);
       setEditing(null);
+      router.replace("/tasks", { scroll: false });
       router.refresh();
     }
   }, [state, router]);
@@ -318,6 +417,7 @@ export function TasksManager({
           onClick={() => {
             setEditing(null);
             setOpen(true);
+            router.replace("/tasks?new=1", { scroll: false });
           }}
         >
           <Plus className="h-4 w-4" />
@@ -378,8 +478,14 @@ export function TasksManager({
                     <StatusBadge status={task.status} />
                   </div>
                   <p className="text-sm text-slate-500">
-                    {task.clients?.name ?? "Sem cliente"} ·{" "}
-                    {formatDateTime(task.start_time)}
+                    {task.clients?.name ?? "Sem cliente"} · Agendada{" "}
+                    {formatScheduledDate(task.scheduled_date)}
+                    {task.duration_minutes
+                      ? ` · ${formatDurationMinutes(task.duration_minutes)}`
+                      : ""}
+                    {task.start_time
+                      ? ` · Início ${formatDateTime(task.start_time)}`
+                      : ""}
                     {task.end_time ? ` – ${formatDateTime(task.end_time)}` : ""}
                   </p>
                   <p className="text-sm text-slate-500">
@@ -411,6 +517,7 @@ export function TasksManager({
                     onClick={() => {
                       setEditing(task);
                       setOpen(true);
+                      router.replace(`/tasks?edit=${task.id}`, { scroll: false });
                     }}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -433,13 +540,14 @@ export function TasksManager({
 
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={closeDialog}
         title={editing ? "Editar intervenção" : "Nova intervenção"}
         description="Cliente, morada, horário e atribuição."
         className="sm:max-w-xl"
       >
         <form action={action} className="space-y-4">
           <TaskFormFields
+            key={editing?.id ?? "new"}
             task={editing}
             clients={clients}
             teams={teams}
@@ -455,7 +563,7 @@ export function TasksManager({
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setOpen(false)}
+              onClick={closeDialog}
             >
               Cancelar
             </Button>

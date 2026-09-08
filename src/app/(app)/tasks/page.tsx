@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Client, Collaborator, Task, Team } from "@/types/database";
 import { TasksManager } from "./tasks-manager";
@@ -13,7 +14,7 @@ export default async function TasksPage() {
       .select(
         "*, clients:client_id(id,name), teams:assigned_team_id(id,name,color_code), collaborators:assigned_collaborator_id(id,full_name)",
       )
-      .order("start_time", { ascending: true, nullsFirst: false }),
+      .order("scheduled_date", { ascending: true, nullsFirst: false }),
     supabase.from("clients").select("*").order("name"),
     supabase.from("teams").select("*").order("name"),
     supabase
@@ -34,11 +35,13 @@ export default async function TasksPage() {
   }
 
   return (
-    <TasksManager
-      tasks={(tasksRes.data ?? []) as Task[]}
-      clients={(clientsRes.data ?? []) as Client[]}
-      teams={(teamsRes.data ?? []) as Team[]}
-      collaborators={(collabRes.data ?? []) as Collaborator[]}
-    />
+    <Suspense fallback={<div className="text-sm text-slate-500">A carregar…</div>}>
+      <TasksManager
+        tasks={(tasksRes.data ?? []) as Task[]}
+        clients={(clientsRes.data ?? []) as Client[]}
+        teams={(teamsRes.data ?? []) as Team[]}
+        collaborators={(collabRes.data ?? []) as Collaborator[]}
+      />
+    </Suspense>
   );
 }

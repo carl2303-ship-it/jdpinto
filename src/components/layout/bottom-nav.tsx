@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Wrench } from "lucide-react";
+import { UsersRound, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TECH_ITEMS = [
   { href: "/tech", label: "Tarefas", icon: Wrench },
+  { href: "/tech/teams", label: "Equipas", icon: UsersRound },
 ] as const;
 
 export function BottomNav({ techOnly = false }: { techOnly?: boolean }) {
@@ -49,7 +50,12 @@ export function BottomNav({ techOnly = false }: { techOnly?: boolean }) {
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">
       <ul className="mx-auto flex max-w-lg items-stretch justify-center px-1 pb-[env(safe-area-inset-bottom)]">
         {TECH_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href);
+          const active =
+            href === "/tech"
+              ? pathname === "/tech" ||
+                (/^\/tech\/[^/]+$/.test(pathname) &&
+                  !pathname.startsWith("/tech/teams"))
+              : pathname === href || pathname.startsWith(`${href}/`);
           return (
             <li key={href} className="flex-1">
               <Link

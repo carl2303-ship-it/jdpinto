@@ -13,8 +13,7 @@ import {
   Upload,
   User,
 } from "lucide-react";
-import type { Client, Task, TaskPhoto, TaskStatus } from "@/types/database";
-import { TASK_STATUS_LABELS } from "@/types/database";
+import type { Client, Task, TaskPhoto } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -28,7 +27,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDateTime, mapsUrl, wazeUrl } from "@/lib/forms";
+import { formatDateTime, formatDurationMinutes, formatScheduledDate, formatClientAddress, mapsUrl, wazeUrl } from "@/lib/forms";
 import {
   saveTechIntervention,
   startMyTask,
@@ -36,7 +35,17 @@ import {
   type ActionResult,
 } from "@/app/(app)/tech/actions";
 
-type ClientInfo = Pick<Client, "id" | "name" | "phone" | "address">;
+type ClientInfo = Pick<
+  Client,
+  | "id"
+  | "name"
+  | "phone"
+  | "address"
+  | "street"
+  | "postal_code"
+  | "locality"
+  | "contact_name"
+>;
 
 type Props = {
   task: Task & { client: ClientInfo | null };
@@ -58,7 +67,8 @@ export function TechTaskDetail({ task, photos }: Props) {
   const [previews, setPreviews] = useState<string[]>([]);
 
   const clientName = task.client?.name ?? "Sem cliente";
-  const address = task.address || task.client?.address || "";
+  const address =
+    task.address || formatClientAddress(task.client) || "";
   const phone = task.contact_phone || task.client?.phone || "";
 
   useEffect(() => {
@@ -81,8 +91,14 @@ export function TechTaskDetail({ task, photos }: Props) {
             {task.title}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            {formatDateTime(task.start_time)}
-            {task.end_time ? ` – ${formatDateTime(task.end_time)}` : ""}
+            Agendada: {formatScheduledDate(task.scheduled_date)}
+            {task.duration_minutes
+              ? ` · Duração ${formatDurationMinutes(task.duration_minutes)}`
+              : ""}
+            {task.start_time
+              ? ` · Início ${formatDateTime(task.start_time)}`
+              : ""}
+            {task.end_time ? ` – Fim ${formatDateTime(task.end_time)}` : ""}
           </p>
         </div>
         <StatusBadge status={task.status} />
@@ -121,7 +137,9 @@ export function TechTaskDetail({ task, photos }: Props) {
                 Pessoa de contacto
               </p>
               <p className="text-brand-navy">
-                {task.contact_name || "Não indicada"}
+                {task.contact_name ||
+                  task.client?.contact_name ||
+                  "Não indicada"}
               </p>
             </div>
           </div>
@@ -147,7 +165,7 @@ export function TechTaskDetail({ task, photos }: Props) {
       </Card>
 
       <div className="flex flex-wrap gap-2">
-        {task.status !== "in_progress" && task.status !== "completed" && (
+        {task.status === "scheduled" && (
           <Button
             type="button"
             onClick={async () => {
@@ -196,7 +214,8 @@ export function TechTaskDetail({ task, photos }: Props) {
         <CardHeader>
           <CardTitle>Detalhes da intervenção</CardTitle>
           <CardDescription>
-            Atualiza horários (24h), relatório e estado.
+            Preenche início e fim (24h). Com data/hora de fim a tarefa fica
+            concluída.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -239,17 +258,6 @@ export function TechTaskDetail({ task, photos }: Props) {
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="status">Estado</Label>
-              <Select id="status" name="status" defaultValue={task.status}>
-                {(Object.keys(TASK_STATUS_LABELS) as TaskStatus[]).map((s) => (
-                  <option key={s} value={s}>
-                    {TASK_STATUS_LABELS[s]}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
             {saveState && !saveState.ok && (
               <p className="text-sm text-red-600">{saveState.error}</p>
             )}
@@ -260,7 +268,7 @@ export function TechTaskDetail({ task, photos }: Props) {
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="submit"
-                disabled={savePending}
+                disabled={savePending || task.status === "completed"}
                 className="flex-1"
                 onClick={() => {
                   const el = document.getElementById(
@@ -271,21 +279,23 @@ export function TechTaskDetail({ task, photos }: Props) {
               >
                 {savePending ? "A guardar…" : "Guardar detalhes"}
               </Button>
-              <Button
-                type="submit"
-                variant="success"
-                disabled={savePending}
-                className="flex-1"
-                onClick={() => {
-                  const el = document.getElementById(
-                    "intent",
-                  ) as HTMLInputElement | null;
-                  if (el) el.value = "complete";
-                }}
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                Concluir tarefa
-              </Button>
+              {task.status !== "completed" && (
+                <Button
+                  type="submit"
+                  variant="success"
+                  disabled={savePending}
+                  className="flex-1"
+                  onClick={() => {
+                    const el = document.getElementById(
+                      "intent",
+                    ) as HTMLInputElement | null;
+                    if (el) el.value = "complete";
+                  }}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Concluir tarefa
+                </Button>
+              )}
             </div>
           </form>
         </CardContent>

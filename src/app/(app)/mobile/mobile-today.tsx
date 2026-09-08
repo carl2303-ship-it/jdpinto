@@ -113,8 +113,11 @@ export function MobileToday({ tasks }: { tasks: TaskRow[] }) {
                 >
                   <CardTitle>{task.title}</CardTitle>
                   <CardDescription>
-                    {task.clients?.name ?? "Sem cliente"} ·{" "}
-                    {formatDateTime(task.start_time)}
+                    {task.clients?.name ?? "Sem cliente"} · Agendada{" "}
+                    {task.scheduled_date ?? "—"}
+                    {task.start_time
+                      ? ` · ${formatDateTime(task.start_time)}`
+                      : ""}
                   </CardDescription>
                 </button>
                 <StatusBadge status={task.status} />
@@ -136,7 +139,11 @@ export function MobileToday({ tasks }: { tasks: TaskRow[] }) {
                 <Button
                   type="button"
                   onClick={() => startTask(task.id)}
-                  disabled={task.status === "completed"}
+                  disabled={
+                    task.status === "completed" ||
+                    task.status === "in_progress" ||
+                    task.status === "cancelled"
+                  }
                 >
                   <Play className="h-4 w-4" />
                   Iniciar

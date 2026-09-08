@@ -5,6 +5,7 @@
   --brand-sky: #0ea5e9;
   --brand-sky-dark: #0284c7;
   --app-bg: #f8fafc;
+  --status-scheduled: #f59e0b;
   --status-pending: #f59e0b;
   --status-in-progress: #0284c7;
   --status-completed: #16a34a;
@@ -20,6 +21,7 @@
   --color-brand-sky: var(--brand-sky);
   --color-brand-sky-dark: var(--brand-sky-dark);
   --color-app-bg: var(--app-bg);
+  --color-status-scheduled: var(--status-scheduled);
   --color-status-pending: var(--status-pending);
   --color-status-in-progress: var(--status-in-progress);
   --color-status-completed: var(--status-completed);

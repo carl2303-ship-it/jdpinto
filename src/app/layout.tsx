@@ -46,7 +46,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full font-sans">
+      <body className="min-h-full max-w-[100vw] overflow-x-hidden font-sans">
         {children}
         <InstallAppPrompt />
       </body>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { emptyToNull } from "@/lib/forms";
+import { emptyToNull, formatClientAddress } from "@/lib/forms";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -12,11 +12,18 @@ export async function upsertClient(
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const id = emptyToNull(formData.get("id"));
+  const street = emptyToNull(formData.get("street"));
+  const postal_code = emptyToNull(formData.get("postal_code"));
+  const locality = emptyToNull(formData.get("locality"));
   const payload = {
     name: String(formData.get("name") ?? "").trim(),
     email: emptyToNull(formData.get("email")),
     phone: emptyToNull(formData.get("phone")),
-    address: emptyToNull(formData.get("address")),
+    contact_name: emptyToNull(formData.get("contact_name")),
+    street,
+    postal_code,
+    locality,
+    address: formatClientAddress({ street, postal_code, locality }),
     vat_number: emptyToNull(formData.get("vat_number")),
     notes: emptyToNull(formData.get("notes")),
   };
@@ -34,6 +41,8 @@ export async function upsertClient(
 
   revalidatePath("/clients");
   revalidatePath("/tasks");
+  revalidatePath("/calendar");
+  revalidatePath("/tech");
   return { ok: true };
 }
 

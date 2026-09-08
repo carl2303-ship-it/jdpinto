@@ -27,20 +27,20 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="flex min-h-full bg-app-bg">
+    <div className="flex min-h-dvh w-full max-w-[100vw] flex-col overflow-x-hidden bg-app-bg lg:flex-row">
       <AppSidebar collaborator={collaborator} email={user?.email} />
-      <div className="flex min-h-full min-w-0 flex-1 flex-col">
-        <main className="flex-1 px-4 py-4 pb-24 lg:px-8 lg:py-6 lg:pb-8">
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
+        <main className="w-full flex-1 overflow-x-hidden px-4 py-4 pb-24 lg:px-8 lg:py-6 lg:pb-8">
           {children}
         </main>
         <BottomNav techOnly={techOnly} />
+        {collaborator && techOnly && (
+          <TechTaskAlerts
+            collaboratorId={collaborator.id}
+            teamIds={teamIds}
+          />
+        )}
       </div>
-      {collaborator && techOnly && (
-        <TechTaskAlerts
-          collaboratorId={collaborator.id}
-          teamIds={teamIds}
-        />
-      )}
     </div>
   );
 }

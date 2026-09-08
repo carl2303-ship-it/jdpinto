@@ -15,7 +15,9 @@ async function assertCanEditTask(taskId: string) {
 
   const { data: task, error } = await supabase
     .from("tasks")
-    .select("id, assigned_collaborator_id, assigned_team_id, start_time")
+    .select(
+      "id, assigned_collaborator_id, assigned_team_id, start_time, end_time, status",
+    )
     .eq("id", taskId)
     .single();
 
@@ -57,9 +59,6 @@ export async function saveTechIntervention(
   const intent = emptyToNull(formData.get("intent")) ?? "save";
   const completing = intent === "complete";
 
-  let status = (emptyToNull(formData.get("status")) ??
-    "in_progress") as TaskStatus;
-
   const formStart = localDateAndTimeToIso(
     String(formData.get("start_date") ?? ""),
     String(formData.get("start_time") ?? ""),
@@ -77,8 +76,18 @@ export async function saveTechIntervention(
 
   if (!times.ok) return times;
 
-  if (completing) {
+  // Estado: fim preenchido (ou concluir) → concluída; senão mantém / em curso
+  let status: TaskStatus = access.task.status as TaskStatus;
+  if (completing || times.end_time) {
+    if (!times.start_time) {
+      return {
+        ok: false,
+        error: "Indica a data/hora de início antes de concluir.",
+      };
+    }
     status = "completed";
+  } else if (status === "scheduled" && times.start_time) {
+    status = "in_progress";
   }
 
   const payload = {
@@ -107,6 +116,7 @@ export async function saveTechIntervention(
   revalidatePath("/tech");
   revalidatePath(`/tech/${taskId}`);
   revalidatePath("/tasks");
+  revalidatePath("/calendar");
   revalidatePath("/mobile");
   return { ok: true };
 }
@@ -123,7 +133,9 @@ export async function uploadTechPhotos(
 
   const photoType = (emptyToNull(formData.get("photo_type")) ??
     "evidence") as PhotoType;
-  const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  const files = formData
+    .getAll("photos")
+    .filter((f): f is File => f instanceof File && f.size > 0);
 
   if (files.length === 0) {
     return { ok: false, error: "Seleciona pelo menos uma fotografia." };
@@ -150,6 +162,7 @@ export async function uploadTechPhotos(
 
   revalidatePath(`/tech/${taskId}`);
   revalidatePath("/tech");
+  revalidatePath("/calendar");
   return { ok: true };
 }
 
@@ -157,14 +170,20 @@ export async function startMyTask(taskId: string): Promise<ActionResult> {
   const access = await assertCanEditTask(taskId);
   if (!access.ok) return access;
 
+  const now = new Date().toISOString();
   const { error } = await access.supabase
     .from("tasks")
-    .update({ status: "in_progress" })
+    .update({
+      status: "in_progress",
+      start_time: access.task.start_time ?? now,
+    })
     .eq("id", taskId);
 
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/tech");
   revalidatePath(`/tech/${taskId}`);
+  revalidatePath("/calendar");
+  revalidatePath("/tasks");
   return { ok: true };
 }

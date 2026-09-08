@@ -34,6 +34,7 @@ const OFFICE_NAV = [
 
 const TECH_NAV = [
   { href: "/tech", label: "As minhas tarefas", icon: Wrench },
+  { href: "/tech/teams", label: "Minhas equipas", icon: UsersRound },
 ] as const;
 
 type Props = {
@@ -51,9 +52,11 @@ export function AppSidebar({ collaborator, email }: Props) {
     <nav className="flex flex-col gap-1 px-3">
       {nav.map(({ href, label, icon: Icon }) => {
         const active =
-          pathname === href ||
-          (href !== "/tech" && pathname.startsWith(`${href}/`)) ||
-          (href === "/tech" && pathname.startsWith("/tech"));
+          href === "/tech"
+            ? pathname === "/tech" ||
+              (/^\/tech\/[^/]+$/.test(pathname) &&
+                !pathname.startsWith("/tech/teams"))
+            : pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}
@@ -100,7 +103,8 @@ export function AppSidebar({ collaborator, email }: Props) {
 
   return (
     <>
-      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-slate-800 bg-brand-navy text-white">
+      {/* Desktop sidebar */}
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-800 bg-brand-navy text-white lg:flex">
         <div className="flex h-16 items-center gap-3 border-b border-white/10 px-5">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-sky text-sm font-bold">
             JD
@@ -116,7 +120,8 @@ export function AppSidebar({ collaborator, email }: Props) {
         <UserFooter />
       </aside>
 
-      <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200 bg-brand-navy px-4 text-white lg:hidden">
+      {/* Mobile top bar — full width row above content (parent is flex-col on mobile) */}
+      <header className="sticky top-0 z-40 flex h-14 w-full shrink-0 items-center justify-between border-b border-slate-200 bg-brand-navy px-4 text-white lg:hidden">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-sky text-xs font-bold">
             JD
@@ -132,16 +137,17 @@ export function AppSidebar({ collaborator, email }: Props) {
         >
           <Menu className="h-5 w-5" />
         </Button>
-      </div>
+      </header>
 
       {open && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal>
           <button
+            type="button"
             className="absolute inset-0 bg-black/50"
             aria-label="Fechar menu"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-brand-navy text-white shadow-xl">
+          <div className="absolute inset-y-0 left-0 flex w-[min(18rem,85vw)] flex-col bg-brand-navy text-white shadow-xl">
             <div className="flex h-14 items-center justify-between border-b border-white/10 px-4">
               <span className="font-semibold">Menu</span>
               <Button

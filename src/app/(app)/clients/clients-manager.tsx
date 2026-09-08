@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { deleteClient, upsertClient, type ActionResult } from "./actions";
+import { formatClientAddress } from "@/lib/forms";
 
 const initial: ActionResult | null = null;
 
@@ -32,6 +33,15 @@ function ClientFormFields({ client }: { client?: Client | null }) {
           required
           defaultValue={client?.name ?? ""}
           placeholder="Nome do cliente"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="contact_name">Pessoa de contacto</Label>
+        <Input
+          id="contact_name"
+          name="contact_name"
+          defaultValue={client?.contact_name ?? ""}
+          placeholder="Nome da pessoa de contacto"
         />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -63,12 +73,35 @@ function ClientFormFields({ client }: { client?: Client | null }) {
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="address">Morada</Label>
+        <Label htmlFor="street">Rua</Label>
         <Input
-          id="address"
-          name="address"
-          defaultValue={client?.address ?? ""}
+          id="street"
+          name="street"
+          defaultValue={client?.street ?? client?.address ?? ""}
+          placeholder="Rua, número, andar…"
         />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="postal_code">Código postal</Label>
+          <Input
+            id="postal_code"
+            name="postal_code"
+            defaultValue={client?.postal_code ?? ""}
+            placeholder="0000-000"
+            autoComplete="postal-code"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="locality">Localidade</Label>
+          <Input
+            id="locality"
+            name="locality"
+            defaultValue={client?.locality ?? ""}
+            placeholder="Cidade / freguesia"
+            autoComplete="address-level2"
+          />
+        </div>
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="notes">Notas</Label>
@@ -96,7 +129,17 @@ export function ClientsManager({ clients }: { clients: Client[] }) {
   const filtered = clients.filter((c) => {
     const q = query.toLowerCase();
     if (!q) return true;
-    return [c.name, c.email, c.phone, c.address, c.vat_number]
+    return [
+      c.name,
+      c.contact_name,
+      c.email,
+      c.phone,
+      c.street,
+      c.postal_code,
+      c.locality,
+      c.address,
+      c.vat_number,
+    ]
       .filter(Boolean)
       .some((v) => String(v).toLowerCase().includes(q));
   });
@@ -170,13 +213,18 @@ export function ClientsManager({ clients }: { clients: Client[] }) {
                 <div className="min-w-0">
                   <p className="font-medium text-brand-navy">{client.name}</p>
                   <p className="mt-0.5 truncate text-sm text-slate-500">
-                    {[client.vat_number && `NIF ${client.vat_number}`, client.phone, client.email]
+                    {[
+                      client.contact_name,
+                      client.vat_number && `NIF ${client.vat_number}`,
+                      client.phone,
+                      client.email,
+                    ]
                       .filter(Boolean)
                       .join(" · ") || "Sem contactos"}
                   </p>
-                  {client.address && (
+                  {formatClientAddress(client) && (
                     <p className="mt-0.5 truncate text-sm text-slate-500">
-                      {client.address}
+                      {formatClientAddress(client)}
                     </p>
                   )}
                 </div>
@@ -209,7 +257,7 @@ export function ClientsManager({ clients }: { clients: Client[] }) {
         open={open}
         onClose={() => setOpen(false)}
         title={editing ? "Editar cliente" : "Novo cliente"}
-        description="Nome, morada, contactos e NIF."
+        description="Nome, pessoa de contacto, morada e NIF."
       >
         <form action={action} className="space-y-4">
           <ClientFormFields client={editing} />

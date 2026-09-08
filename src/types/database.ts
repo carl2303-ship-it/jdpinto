@@ -1,6 +1,10 @@
 export type CollaboratorRole = "admin" | "field_tech" | "manager";
 export type CollaboratorStatus = "active" | "inactive";
-export type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
+export type TaskStatus =
+  | "scheduled"
+  | "in_progress"
+  | "completed"
+  | "cancelled";
 export type PhotoType = "before" | "after" | "evidence";
 
 export type Client = {
@@ -8,7 +12,12 @@ export type Client = {
   name: string;
   email: string | null;
   phone: string | null;
+  contact_name: string | null;
+  /** @deprecated prefer street + postal_code + locality; mantido composto na BD */
   address: string | null;
+  street: string | null;
+  postal_code: string | null;
+  locality: string | null;
   vat_number: string | null;
   notes: string | null;
   created_at: string;
@@ -46,6 +55,10 @@ export type Task = {
   address: string | null;
   contact_name: string | null;
   contact_phone: string | null;
+  /** Data de agendamento (admin) — yyyy-mm-dd */
+  scheduled_date: string | null;
+  /** Duração estimada em minutos */
+  duration_minutes: number | null;
   start_time: string | null;
   end_time: string | null;
   assigned_team_id: string | null;
@@ -65,14 +78,14 @@ export type TaskPhoto = {
 };
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
-  pending: "Pendente",
+  scheduled: "Agendada",
   in_progress: "Em Curso",
   completed: "Concluída",
   cancelled: "Cancelada",
 };
 
 export const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
-  pending: "#f59e0b",
+  scheduled: "#f59e0b",
   in_progress: "#0284c7",
   completed: "#16a34a",
   cancelled: "#ef4444",
@@ -83,3 +96,9 @@ export const ROLE_LABELS: Record<CollaboratorRole, string> = {
   manager: "Gestor",
   field_tech: "Técnico de Campo",
 };
+
+/** Link do calendário: admin edita se aberta; concluída → relatório/fotos. */
+export function calendarTaskHref(task: Pick<Task, "id" | "status">) {
+  if (task.status === "completed") return `/tech/${task.id}`;
+  return `/tasks?edit=${task.id}`;
+}

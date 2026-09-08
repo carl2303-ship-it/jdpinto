@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { emptyToNull, localDateAndTimeToIso, resolveTaskTimeRange } from "@/lib/forms";
+import { emptyToNull, formatClientAddress, parseDurationFromForm } from "@/lib/forms";
 import type { TaskStatus } from "@/types/database";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -15,19 +15,13 @@ function taskPayload(formData: FormData) {
     address: emptyToNull(formData.get("address")),
     contact_name: emptyToNull(formData.get("contact_name")),
     contact_phone: emptyToNull(formData.get("contact_phone")),
-    start_time: localDateAndTimeToIso(
-      String(formData.get("start_date") ?? ""),
-      String(formData.get("start_time") ?? ""),
-    ),
-    end_time: localDateAndTimeToIso(
-      String(formData.get("end_date") ?? ""),
-      String(formData.get("end_time") ?? ""),
-    ),
+    scheduled_date: emptyToNull(formData.get("scheduled_date")),
+    duration_minutes: parseDurationFromForm(formData),
     assigned_team_id: emptyToNull(formData.get("assigned_team_id")),
     assigned_collaborator_id: emptyToNull(
       formData.get("assigned_collaborator_id"),
     ),
-    status: (emptyToNull(formData.get("status")) ?? "pending") as TaskStatus,
+    status: (emptyToNull(formData.get("status")) ?? "scheduled") as TaskStatus,
   };
 }
 
@@ -42,25 +36,23 @@ export async function upsertTask(
   if (!payload.title) {
     return { ok: false, error: "O título é obrigatório." };
   }
+  if (!payload.scheduled_date) {
+    return { ok: false, error: "A data agendada é obrigatória." };
+  }
 
-  const times = resolveTaskTimeRange({
-    start: payload.start_time,
-    end: payload.end_time,
-  });
-  if (!times.ok) return times;
-  payload.start_time = times.start_time;
-  payload.end_time = times.end_time;
-
-  // Se morada/telefone vazios, copiar do cliente
-  if (payload.client_id && (!payload.address || !payload.contact_phone)) {
+  // Se morada/telefone/contacto vazios, copiar do cliente
+  if (payload.client_id) {
     const { data: client } = await supabase
       .from("clients")
-      .select("address, phone")
+      .select("street, postal_code, locality, address, phone, contact_name")
       .eq("id", payload.client_id)
       .maybeSingle();
     if (client) {
-      if (!payload.address) payload.address = client.address;
+      if (!payload.address) {
+        payload.address = formatClientAddress(client);
+      }
       if (!payload.contact_phone) payload.contact_phone = client.phone;
+      if (!payload.contact_name) payload.contact_name = client.contact_name;
     }
   }
 
@@ -69,15 +61,7 @@ export async function upsertTask(
     : supabase.from("tasks").insert(payload);
 
   const { error } = await query;
-  if (error) {
-    if (error.message.includes("tasks_time_range_check")) {
-      return {
-        ok: false,
-        error: "A hora de fim tem de ser igual ou posterior à de início.",
-      };
-    }
-    return { ok: false, error: error.message };
-  }
+  if (error) return { ok: false, error: error.message };
 
   revalidatePath("/tasks");
   revalidatePath("/calendar");
