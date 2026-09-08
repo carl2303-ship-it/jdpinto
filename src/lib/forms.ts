@@ -13,9 +13,8 @@ export function localDateAndTimeToIso(
 ): string | null {
   const d = dateValue?.trim() ?? "";
   const t = timeValue?.trim() ?? "";
-  if (!d) return null;
-  const time = t || "00:00";
-  const date = new Date(`${d}T${time}:00`);
+  if (!d || !t) return null;
+  const date = new Date(`${d}T${t}:00`);
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString();
 }
@@ -132,24 +131,17 @@ export function formatDurationMinutes(minutes: number | null | undefined) {
   return `${h}h ${m}min`;
 }
 
-export function parseDurationFromForm(formData: FormData): number | null {
-  const hoursRaw = String(formData.get("duration_hours") ?? "").trim();
-  const minsRaw = String(formData.get("duration_mins") ?? "").trim();
-  const legacy = String(formData.get("duration_minutes") ?? "").trim();
-
-  if (hoursRaw !== "" || minsRaw !== "") {
-    const hours = hoursRaw === "" ? 0 : Number(hoursRaw);
-    const mins = minsRaw === "" ? 0 : Number(minsRaw);
-    if (!Number.isFinite(hours) || !Number.isFinite(mins)) return null;
-    if (hours < 0 || mins < 0 || mins > 59) return null;
-    const total = Math.round(hours * 60 + mins);
-    return total > 0 ? total : null;
-  }
-
-  if (legacy === "") return null;
-  const n = Number(legacy);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n);
+/** Minutos entre início e fim (arredondados). */
+export function durationMinutesBetween(
+  startIso: string | null | undefined,
+  endIso: string | null | undefined,
+): number | null {
+  if (!startIso || !endIso) return null;
+  const start = new Date(startIso).getTime();
+  const end = new Date(endIso).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
+  const mins = Math.round((end - start) / 60000);
+  return mins > 0 ? mins : null;
 }
 
 export function formatTime24(value: string | null) {

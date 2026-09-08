@@ -55,9 +55,11 @@ export type Task = {
   address: string | null;
   contact_name: string | null;
   contact_phone: string | null;
-  /** Data de agendamento (admin) — yyyy-mm-dd */
+  /** Data de agendamento (dia) — yyyy-mm-dd, para calendário */
   scheduled_date: string | null;
-  /** Duração estimada em minutos */
+  /** Data e hora de agendamento (admin) */
+  scheduled_at: string | null;
+  /** Duração real em minutos (calculada quando o técnico define o fim) */
   duration_minutes: number | null;
   start_time: string | null;
   end_time: string | null;

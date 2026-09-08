@@ -1,4 +1,7 @@
-/** Alerta sonoro curto (Web Audio) — não precisa de ficheiro. */
+/**
+ * Alerta sonoro prolongado (Web Audio) — ~4.5s, padrão tipo alarme
+ * para novas tarefas atribuídas. Não precisa de ficheiro.
+ */
 export function playTaskAlertSound() {
   if (typeof window === "undefined") return;
 
@@ -9,26 +12,38 @@ export function playTaskAlertSound() {
         .webkitAudioContext;
     const ctx = new Ctx();
 
-    const beep = (freq: number, start: number, duration: number) => {
+    const tone = (
+      freq: number,
+      start: number,
+      duration: number,
+      volume = 0.28,
+    ) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "sine";
+      osc.type = "square";
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime + start);
-      gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        ctx.currentTime + start + duration,
-      );
+      const t0 = ctx.currentTime + start;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(volume, t0 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + duration + 0.02);
+      osc.start(t0);
+      osc.stop(t0 + duration + 0.03);
     };
 
-    beep(880, 0, 0.18);
-    beep(1175, 0.2, 0.22);
-    beep(1319, 0.42, 0.28);
+    // 3 rajadas (cada uma: 3 tons ascendentes) com pausas — ~4.5s
+    const burst = (offset: number) => {
+      tone(740, offset, 0.22, 0.22);
+      tone(988, offset + 0.26, 0.22, 0.26);
+      tone(1175, offset + 0.52, 0.35, 0.3);
+    };
+
+    burst(0);
+    burst(1.4);
+    burst(2.8);
+    // tom final mais longo
+    tone(1319, 4.1, 0.55, 0.32);
 
     void ctx.resume();
   } catch {

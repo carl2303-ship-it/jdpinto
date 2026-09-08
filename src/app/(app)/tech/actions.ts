@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMyCollaborator } from "@/lib/auth";
-import { emptyToNull, localDateAndTimeToIso, resolveTaskTimeRange } from "@/lib/forms";
+import { emptyToNull, localDateAndTimeToIso, resolveTaskTimeRange, durationMinutesBetween } from "@/lib/forms";
 import type { PhotoType, TaskStatus } from "@/types/database";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -95,6 +95,10 @@ export async function saveTechIntervention(
     description: emptyToNull(formData.get("description")),
     start_time: times.start_time,
     end_time: times.end_time,
+    duration_minutes: durationMinutesBetween(
+      times.start_time,
+      times.end_time,
+    ),
     status,
   };
 

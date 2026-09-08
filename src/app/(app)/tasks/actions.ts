@@ -2,12 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { emptyToNull, formatClientAddress, parseDurationFromForm } from "@/lib/forms";
+import {
+  emptyToNull,
+  formatClientAddress,
+  localDateAndTimeToIso,
+} from "@/lib/forms";
 import type { TaskStatus } from "@/types/database";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 function taskPayload(formData: FormData) {
+  const scheduledDate = emptyToNull(formData.get("scheduled_date"));
+  const scheduledAt = localDateAndTimeToIso(
+    String(formData.get("scheduled_date") ?? ""),
+    String(formData.get("scheduled_time") ?? ""),
+  );
+
   return {
     title: String(formData.get("title") ?? "").trim(),
     description: emptyToNull(formData.get("description")),
@@ -15,8 +25,8 @@ function taskPayload(formData: FormData) {
     address: emptyToNull(formData.get("address")),
     contact_name: emptyToNull(formData.get("contact_name")),
     contact_phone: emptyToNull(formData.get("contact_phone")),
-    scheduled_date: emptyToNull(formData.get("scheduled_date")),
-    duration_minutes: parseDurationFromForm(formData),
+    scheduled_date: scheduledDate,
+    scheduled_at: scheduledAt,
     assigned_team_id: emptyToNull(formData.get("assigned_team_id")),
     assigned_collaborator_id: emptyToNull(
       formData.get("assigned_collaborator_id"),
@@ -36,8 +46,11 @@ export async function upsertTask(
   if (!payload.title) {
     return { ok: false, error: "O título é obrigatório." };
   }
-  if (!payload.scheduled_date) {
-    return { ok: false, error: "A data agendada é obrigatória." };
+  if (!payload.scheduled_date || !payload.scheduled_at) {
+    return {
+      ok: false,
+      error: "A data e hora de agendamento são obrigatórias.",
+    };
   }
 
   // Se morada/telefone/contacto vazios, copiar do cliente

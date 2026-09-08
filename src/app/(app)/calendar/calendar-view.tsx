@@ -42,6 +42,7 @@ export type CalendarTask = Pick<
   | "id"
   | "title"
   | "scheduled_date"
+  | "scheduled_at"
   | "start_time"
   | "end_time"
   | "status"
@@ -58,6 +59,7 @@ const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 function taskDayKey(task: CalendarTask) {
   if (task.scheduled_date) return task.scheduled_date.slice(0, 10);
+  if (task.scheduled_at) return format(parseISO(task.scheduled_at), "yyyy-MM-dd");
   if (!task.start_time) return null;
   return format(parseISO(task.start_time), "yyyy-MM-dd");
 }
@@ -267,7 +269,9 @@ export function CalendarView({ tasks }: { tasks: CalendarTask[] }) {
                             >
                               {task.start_time
                                 ? `${formatTime24(task.start_time)} `
-                                : ""}
+                                : task.scheduled_at
+                                  ? `${formatTime24(task.scheduled_at)} `
+                                  : ""}
                               {task.title}
                             </Link>
                           ))}
@@ -387,7 +391,11 @@ function TaskRow({
         </div>
         <p className="mt-0.5 text-sm text-slate-500">
           {[
-            task.start_time && formatTime24(task.start_time),
+            task.start_time
+              ? formatTime24(task.start_time)
+              : task.scheduled_at
+                ? formatTime24(task.scheduled_at)
+                : null,
             task.client_name,
             task.team_name,
             task.assignee_name,

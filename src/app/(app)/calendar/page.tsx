@@ -48,6 +48,7 @@ export default async function CalendarPage() {
     id: t.id,
     title: t.title,
     scheduled_date: t.scheduled_date,
+    scheduled_at: t.scheduled_at,
     start_time: t.start_time,
     end_time: t.end_time,
     status: t.status,

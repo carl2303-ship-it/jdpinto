@@ -28,9 +28,9 @@ import {
 import {
   formatDateTime,
   formatDurationMinutes,
-  formatScheduledDate,
   mapsUrl,
 } from "@/lib/forms";
+import { DateTime24Fields } from "@/components/ui/date-time-24";
 import { createClientQuick } from "@/app/(app)/clients/actions";
 import { deleteTask, upsertTask, type ActionResult } from "./actions";
 
@@ -195,69 +195,17 @@ function TaskFormFields({
         />
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="scheduled_date">Data agendada *</Label>
-        <Input
-          id="scheduled_date"
-          name="scheduled_date"
-          type="date"
-          required
-          defaultValue={task?.scheduled_date ?? ""}
-        />
-        <p className="text-xs text-slate-500">
-          O técnico preenche depois a hora de início e de fim no local.
-        </p>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label>Duração da intervenção</Label>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label
-              htmlFor="duration_hours"
-              className="text-xs font-normal text-slate-500"
-            >
-              Horas
-            </Label>
-            <Input
-              id="duration_hours"
-              name="duration_hours"
-              type="number"
-              min={0}
-              max={48}
-              step={1}
-              placeholder="0"
-              defaultValue={
-                task?.duration_minutes != null
-                  ? Math.floor(task.duration_minutes / 60)
-                  : ""
-              }
-            />
-          </div>
-          <div className="space-y-1">
-            <Label
-              htmlFor="duration_mins"
-              className="text-xs font-normal text-slate-500"
-            >
-              Minutos
-            </Label>
-            <Input
-              id="duration_mins"
-              name="duration_mins"
-              type="number"
-              min={0}
-              max={59}
-              step={5}
-              placeholder="0"
-              defaultValue={
-                task?.duration_minutes != null
-                  ? task.duration_minutes % 60
-                  : ""
-              }
-            />
-          </div>
-        </div>
-      </div>
+      <DateTime24Fields
+        label="Agendamento *"
+        dateName="scheduled_date"
+        timeName="scheduled_time"
+        value={task?.scheduled_at ?? null}
+        required
+      />
+      <p className="-mt-1 text-xs text-slate-500">
+        Data e hora previstas. O técnico regista depois o início e o fim reais;
+        a duração é calculada automaticamente.
+      </p>
 
       {(task?.start_time || task?.end_time) && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -265,6 +213,9 @@ function TaskFormFields({
           <p>
             Início: {formatDateTime(task.start_time ?? null)}
             {task.end_time ? ` · Fim: ${formatDateTime(task.end_time)}` : ""}
+            {task.duration_minutes
+              ? ` · Duração: ${formatDurationMinutes(task.duration_minutes)}`
+              : ""}
           </p>
         </div>
       )}
@@ -479,7 +430,7 @@ export function TasksManager({
                   </div>
                   <p className="text-sm text-slate-500">
                     {task.clients?.name ?? "Sem cliente"} · Agendada{" "}
-                    {formatScheduledDate(task.scheduled_date)}
+                    {formatDateTime(task.scheduled_at ?? task.scheduled_date)}
                     {task.duration_minutes
                       ? ` · ${formatDurationMinutes(task.duration_minutes)}`
                       : ""}

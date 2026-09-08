@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDateTime, formatDurationMinutes, formatScheduledDate } from "@/lib/forms";
+import { formatDateTime, formatDurationMinutes } from "@/lib/forms";
 
 export const metadata = { title: "As minhas tarefas" };
 
@@ -116,7 +116,9 @@ export default async function TechDashboardPage() {
                       <CardTitle className="text-base">{task.title}</CardTitle>
                       <CardDescription>
                         {task.clients?.name ?? "Sem cliente"} ·{" "}
-                        {formatScheduledDate(task.scheduled_date)}
+                        {formatDateTime(
+                          task.scheduled_at ?? task.scheduled_date,
+                        )}
                         {task.duration_minutes
                           ? ` · ${formatDurationMinutes(task.duration_minutes)}`
                           : ""}

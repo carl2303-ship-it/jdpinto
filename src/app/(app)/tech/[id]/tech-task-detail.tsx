@@ -27,7 +27,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDateTime, formatDurationMinutes, formatScheduledDate, formatClientAddress, mapsUrl, wazeUrl } from "@/lib/forms";
+import { formatDateTime, formatDurationMinutes, formatClientAddress, mapsUrl, wazeUrl, durationMinutesBetween } from "@/lib/forms";
 import {
   saveTechIntervention,
   startMyTask,
@@ -91,14 +91,15 @@ export function TechTaskDetail({ task, photos }: Props) {
             {task.title}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Agendada: {formatScheduledDate(task.scheduled_date)}
-            {task.duration_minutes
-              ? ` · Duração ${formatDurationMinutes(task.duration_minutes)}`
-              : ""}
+            Agendada:{" "}
+            {formatDateTime(task.scheduled_at ?? task.scheduled_date)}
             {task.start_time
               ? ` · Início ${formatDateTime(task.start_time)}`
               : ""}
             {task.end_time ? ` – Fim ${formatDateTime(task.end_time)}` : ""}
+            {task.duration_minutes
+              ? ` · Duração ${formatDurationMinutes(task.duration_minutes)}`
+              : ""}
           </p>
         </div>
         <StatusBadge status={task.status} />
@@ -214,8 +215,8 @@ export function TechTaskDetail({ task, photos }: Props) {
         <CardHeader>
           <CardTitle>Detalhes da intervenção</CardTitle>
           <CardDescription>
-            Preenche início e fim (24h). Com data/hora de fim a tarefa fica
-            concluída.
+            Preenche início e fim (24h). Com data/hora de fim a duração é
+            calculada e a tarefa fica concluída.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -237,6 +238,16 @@ export function TechTaskDetail({ task, photos }: Props) {
                 value={task.end_time}
               />
             </div>
+
+            {task.start_time && task.end_time && (
+              <p className="rounded-lg bg-brand-sky/10 px-3 py-2 text-sm font-medium text-brand-sky-dark">
+                Duração:{" "}
+                {formatDurationMinutes(
+                  task.duration_minutes ??
+                    durationMinutesBetween(task.start_time, task.end_time),
+                )}
+              </p>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="description">Notas / descrição</Label>
@@ -354,7 +365,6 @@ export function TechTaskDetail({ task, photos }: Props) {
                 type="file"
                 accept="image/*"
                 multiple
-                capture="environment"
                 className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-sky/10 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-sky-dark"
                 onChange={(e) => {
                   const files = e.target.files;

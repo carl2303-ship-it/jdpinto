@@ -114,7 +114,7 @@ export function MobileToday({ tasks }: { tasks: TaskRow[] }) {
                   <CardTitle>{task.title}</CardTitle>
                   <CardDescription>
                     {task.clients?.name ?? "Sem cliente"} · Agendada{" "}
-                    {task.scheduled_date ?? "—"}
+                    {formatDateTime(task.scheduled_at ?? task.scheduled_date)}
                     {task.start_time
                       ? ` · ${formatDateTime(task.start_time)}`
                       : ""}
@@ -207,7 +207,6 @@ export function MobileToday({ tasks }: { tasks: TaskRow[] }) {
                   type="file"
                   accept="image/*"
                   multiple
-                  capture="environment"
                   className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-sky/10 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-sky-dark"
                   onChange={(e) => setPhotos(e.target.files)}
                 />

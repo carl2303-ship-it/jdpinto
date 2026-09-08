@@ -99,6 +99,7 @@ export function DateTime24Fields({
             <select
               aria-label={`${label} — hora`}
               value={hour}
+              required={required}
               onChange={(e) => setHour(e.target.value)}
               className={cn(
                 "h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-center font-mono text-base font-semibold tabular-nums",
@@ -121,6 +122,7 @@ export function DateTime24Fields({
             <select
               aria-label={`${label} — minutos`}
               value={minute}
+              required={required}
               onChange={(e) => setMinute(e.target.value)}
               className={cn(
                 "h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-center font-mono text-base font-semibold tabular-nums",
