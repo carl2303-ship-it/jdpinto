@@ -1,0 +1,11 @@
+# A project for local development linked to a remote Supabase project.
+# Link with: npx supabase link --project-ref <ref>
+
+[project]
+id = "ifiaxekgobupwbrmimzw"
+
+[api]
+enabled = true
+
+[db]
+major_version = 17
