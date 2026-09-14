@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMyCollaborator } from "@/lib/auth";
-import { emptyToNull, localDateAndTimeToIso, resolveTaskTimeRange, durationMinutesBetween } from "@/lib/forms";
+import { emptyToNull, localDateAndTimeToIso, resolveTaskTimeRange, durationMinutesBetween, sameLocalMinute } from "@/lib/forms";
 import type { PhotoType, TaskStatus } from "@/types/database";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -68,50 +68,62 @@ export async function saveTechIntervention(
     String(formData.get("end_time") ?? ""),
   );
 
+  // Preferir o início já gravado («Iniciar») se o formulário aponta para o mesmo minuto
+  let startInput = formStart ?? access.task.start_time ?? null;
+  if (
+    access.task.start_time &&
+    formStart &&
+    sameLocalMinute(access.task.start_time, formStart)
+  ) {
+    startInput = access.task.start_time;
+  }
+
   const times = resolveTaskTimeRange({
-    start: formStart ?? access.task.start_time ?? null,
+    start: startInput,
     end: formEnd ?? access.task.end_time ?? null,
     completing,
   });
 
   if (!times.ok) return times;
 
+  const start_time = times.start_time;
+  const end_time = times.end_time;
+
   // Estado: com fim → concluída; com início → em curso; senão agendada
   let status: TaskStatus = access.task.status as TaskStatus;
-  if (completing || times.end_time) {
-    if (!times.start_time) {
+  if (completing || end_time) {
+    if (!start_time) {
       return {
         ok: false,
         error: "Indica a data/hora de início antes de concluir.",
       };
     }
-    if (completing && !times.end_time) {
+    if (completing && !end_time) {
       return {
         ok: false,
         error: "Indica a data/hora de fim para concluir.",
       };
     }
     status = "completed";
-  } else if (times.start_time) {
+  } else if (start_time) {
     status = "in_progress";
   } else if (status === "completed" || status === "in_progress") {
     // Correção: sem início/fim volta a agendada
     status = "scheduled";
   }
 
-  const rawDuration = durationMinutesBetween(
-    times.start_time,
-    times.end_time,
-  );
+  const rawDuration = durationMinutesBetween(start_time, end_time);
   // Constraint na BD: duration_minutes > 0 (mínimo 1 min se início=fim)
   const duration_minutes =
-    rawDuration == null ? null : Math.max(1, rawDuration);
+    rawDuration == null
+      ? null
+      : Math.max(1, rawDuration === 0 ? 1 : rawDuration);
 
   const payload = {
     report_notes: emptyToNull(formData.get("report_notes")),
     description: emptyToNull(formData.get("description")),
-    start_time: times.start_time,
-    end_time: times.end_time,
+    start_time,
+    end_time,
     duration_minutes,
     status,
   };

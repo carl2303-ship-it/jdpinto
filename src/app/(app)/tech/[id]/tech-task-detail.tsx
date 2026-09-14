@@ -227,6 +227,15 @@ export function TechTaskDetail({ task, photos }: Props) {
             <input type="hidden" name="id" value={task.id} />
             <input type="hidden" name="intent" id="intent" value="save" />
 
+            <div className="space-y-1.5">
+              <Label htmlFor="description">Notas / descrição</Label>
+              <Textarea
+                id="description"
+                name="description"
+                defaultValue={task.description ?? ""}
+              />
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-2">
               <DateTime24Fields
                 label="Início"
@@ -251,15 +260,6 @@ export function TechTaskDetail({ task, photos }: Props) {
                 )}
               </p>
             )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor="description">Notas / descrição</Label>
-              <Textarea
-                id="description"
-                name="description"
-                defaultValue={task.description ?? ""}
-              />
-            </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="report_notes">Relatório final</Label>

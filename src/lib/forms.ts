@@ -132,6 +132,20 @@ export function formatDurationMinutes(minutes: number | null | undefined) {
   return `${h}h ${m}min`;
 }
 
+/** True se os dois ISO caem no mesmo minuto (hora local). */
+export function sameLocalMinute(a: string, b: string) {
+  const da = new Date(a);
+  const db = new Date(b);
+  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return false;
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate() &&
+    da.getHours() === db.getHours() &&
+    da.getMinutes() === db.getMinutes()
+  );
+}
+
 /** Minutos entre início e fim (arredondados; 0 se for o mesmo minuto). */
 export function durationMinutesBetween(
   startIso: string | null | undefined,
@@ -206,11 +220,22 @@ export function resolveTaskTimeRange(opts: {
     if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
       return { ok: false, error: "Data/hora inválida." };
     }
+    // Mesmo minuto (ex.: início 09:30:45 e fim 09:30): aceitar
     if (endMs < startMs) {
-      return {
-        ok: false,
-        error: "A hora de fim tem de ser igual ou posterior à de início.",
-      };
+      const sameMinute =
+        new Date(start_time).getFullYear() === new Date(end_time).getFullYear() &&
+        new Date(start_time).getMonth() === new Date(end_time).getMonth() &&
+        new Date(start_time).getDate() === new Date(end_time).getDate() &&
+        new Date(start_time).getHours() === new Date(end_time).getHours() &&
+        new Date(start_time).getMinutes() === new Date(end_time).getMinutes();
+      if (sameMinute) {
+        end_time = start_time;
+      } else {
+        return {
+          ok: false,
+          error: "A hora de fim tem de ser igual ou posterior à de início.",
+        };
+      }
     }
   }
 
