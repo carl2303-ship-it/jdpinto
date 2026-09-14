@@ -43,6 +43,8 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [live, setLive] = useState(false);
   const [pushReady, setPushReady] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
   const seenRef = useRef<Set<string>>(new Set());
   const teamSet = useRef(new Set(teamIds));
   const readyRef = useRef(false);
@@ -240,48 +242,68 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
         await ensureNotificationPermission();
         const push = await subscribePushNotifications(collaboratorId);
         setPushReady(push.ok);
+        setPushError(push.ok ? null : push.error);
       })();
     }
   }, [collaboratorId]);
 
   async function unlockAudio() {
+    setPushBusy(true);
+    setPushError(null);
     setAudioUnlocked(true);
     localStorage.setItem("jdpinto-alerts-on", "1");
     playTaskAlertSound();
     await ensureNotificationPermission();
     const push = await subscribePushNotifications(collaboratorId);
     setPushReady(push.ok);
+    setPushError(push.ok ? null : push.error);
+    setPushBusy(false);
   }
 
   return (
     <>
-      {!audioUnlocked && (
+      {(!audioUnlocked || !pushReady) && (
         <button
           type="button"
           onClick={() => void unlockAudio()}
-          className="fixed bottom-20 right-3 z-40 max-w-[12rem] rounded-full bg-brand-navy px-3 py-2 text-left text-xs font-medium text-white shadow-lg lg:bottom-6"
+          disabled={pushBusy}
+          className="fixed bottom-20 right-3 z-40 max-w-[13rem] rounded-full bg-brand-navy px-3 py-2 text-left text-xs font-medium text-white shadow-lg lg:bottom-6"
         >
           <span className="inline-flex items-start gap-1.5">
             <Bell className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
-              Ativar alertas
+              {pushBusy
+                ? "A ativar…"
+                : pushReady
+                  ? "Alertas OK"
+                  : audioUnlocked
+                    ? "Ativar push (2.º plano)"
+                    : "Ativar alertas"}
               <span className="mt-0.5 block text-[10px] font-normal text-white/70">
-                {live ? "ligado · push" : "a ligar…"}
+                {pushReady
+                  ? "notificações em segundo plano"
+                  : "necessário para app fechada"}
               </span>
             </span>
           </span>
         </button>
       )}
 
-      {audioUnlocked && (
+      {audioUnlocked && pushReady && (
         <div
           className="fixed bottom-20 right-3 z-30 rounded-full border border-slate-200 bg-white/95 px-2.5 py-1 text-[10px] font-medium text-slate-500 shadow lg:bottom-6"
           title="Alertas de novas tarefas"
         >
-          <span
-            className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${live || pushReady ? "bg-emerald-500" : "bg-amber-400"}`}
-          />
-          Alertas {pushReady ? "push ativos" : live ? "ativos" : "em espera"}
+          <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          Push ativo
+          {live ? " · live" : ""}
+        </div>
+      )}
+
+      {pushError && audioUnlocked && !pushReady && (
+        <div className="fixed inset-x-3 bottom-36 z-40 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow lg:bottom-20 lg:left-auto lg:right-3 lg:max-w-xs">
+          Push não ativado: {pushError}. No telemóvel, instala a app no ecrã
+          inicial e permite notificações.
         </div>
       )}
 

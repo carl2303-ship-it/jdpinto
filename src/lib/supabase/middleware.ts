@@ -43,7 +43,11 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.webmanifest" ||
-    pathname === "/icon.svg";
+    pathname === "/sw.js" ||
+    pathname === "/icon.svg" ||
+    pathname === "/icon-192.png" ||
+    pathname === "/icon-512.png" ||
+    pathname === "/apple-touch-icon.png";
 
   if (!user && !isAuthRoute && !isPublicAsset) {
     const redirectUrl = request.nextUrl.clone();

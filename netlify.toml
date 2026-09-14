@@ -12,3 +12,10 @@
   command = "npm run dev"
   targetPort = 3000
   autoLaunch = false
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Service-Worker-Allowed = "/"
+    Content-Type = "application/javascript; charset=utf-8"

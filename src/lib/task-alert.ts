@@ -71,7 +71,9 @@ export async function ensureServiceWorker() {
   try {
     const reg = await navigator.serviceWorker.register("/sw.js", {
       scope: "/",
+      updateViaCache: "none",
     });
+    await reg.update().catch(() => undefined);
     await navigator.serviceWorker.ready;
     return reg;
   } catch {
@@ -104,12 +106,19 @@ export async function subscribePushNotifications(collaboratorId: string) {
   }
 
   let sub = await reg.pushManager.getSubscription();
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
+  // Re-subscrever se a chave VAPID mudou / subscrição antiga
+  if (sub) {
+    try {
+      await sub.unsubscribe();
+    } catch {
+      // ignore
+    }
+    sub = null;
   }
+  sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  });
 
   const json = sub.toJSON();
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
