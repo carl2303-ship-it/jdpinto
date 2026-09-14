@@ -7,6 +7,7 @@ import {
   formatClientAddress,
   localDateAndTimeToIso,
 } from "@/lib/forms";
+import { parsePlannedDurationFromForm } from "@/lib/team-availability";
 import type { TaskStatus } from "@/types/database";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -22,11 +23,12 @@ function taskPayload(formData: FormData) {
     title: String(formData.get("title") ?? "").trim(),
     description: emptyToNull(formData.get("description")),
     client_id: emptyToNull(formData.get("client_id")),
-    address: emptyToNull(formData.get("address")),
-    contact_name: emptyToNull(formData.get("contact_name")),
-    contact_phone: emptyToNull(formData.get("contact_phone")),
+    address: null as string | null,
+    contact_name: null as string | null,
+    contact_phone: null as string | null,
     scheduled_date: scheduledDate,
     scheduled_at: scheduledAt,
+    planned_duration_minutes: parsePlannedDurationFromForm(formData),
     assigned_team_id: emptyToNull(formData.get("assigned_team_id")),
     assigned_collaborator_id: emptyToNull(
       formData.get("assigned_collaborator_id"),
@@ -52,22 +54,28 @@ export async function upsertTask(
       error: "A data e hora de agendamento são obrigatórias.",
     };
   }
-
-  // Se morada/telefone/contacto vazios, copiar do cliente
-  if (payload.client_id) {
-    const { data: client } = await supabase
-      .from("clients")
-      .select("street, postal_code, locality, address, phone, contact_name")
-      .eq("id", payload.client_id)
-      .maybeSingle();
-    if (client) {
-      if (!payload.address) {
-        payload.address = formatClientAddress(client);
-      }
-      if (!payload.contact_phone) payload.contact_phone = client.phone;
-      if (!payload.contact_name) payload.contact_name = client.contact_name;
-    }
+  if (!payload.planned_duration_minutes) {
+    return {
+      ok: false,
+      error: "A duração prevista é obrigatória (ajuda a planear as equipas).",
+    };
   }
+  if (!payload.client_id) {
+    return { ok: false, error: "Seleciona ou cria um cliente." };
+  }
+
+  // Morada e contactos vêm sempre do cliente
+  const { data: client } = await supabase
+    .from("clients")
+    .select("street, postal_code, locality, address, phone, contact_name")
+    .eq("id", payload.client_id)
+    .maybeSingle();
+  if (!client) {
+    return { ok: false, error: "Cliente não encontrado." };
+  }
+  payload.address = formatClientAddress(client);
+  payload.contact_phone = client.phone;
+  payload.contact_name = client.contact_name;
 
   const query = id
     ? supabase.from("tasks").update(payload).eq("id", id)

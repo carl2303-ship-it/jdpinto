@@ -265,13 +265,18 @@ export function CalendarView({ tasks }: { tasks: CalendarTask[] }) {
                                 backgroundColor:
                                   TASK_STATUS_COLORS[task.status],
                               }}
-                              title={task.title}
+                              title={
+                                task.team_name
+                                  ? `${task.title} · ${task.team_name}`
+                                  : task.title
+                              }
                             >
                               {task.start_time
                                 ? `${formatTime24(task.start_time)} `
                                 : task.scheduled_at
                                   ? `${formatTime24(task.scheduled_at)} `
                                   : ""}
+                              {task.team_name ? `${task.team_name}: ` : ""}
                               {task.title}
                             </Link>
                           ))}
@@ -388,6 +393,11 @@ function TaskRow({
         <div className="flex flex-wrap items-center gap-2">
           <p className="font-medium text-brand-navy">{task.title}</p>
           <StatusBadge status={task.status} />
+          {task.team_name && (
+            <span className="rounded-md bg-brand-navy/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+              {task.team_name}
+            </span>
+          )}
         </div>
         <p className="mt-0.5 text-sm text-slate-500">
           {[
@@ -397,7 +407,6 @@ function TaskRow({
                 ? formatTime24(task.scheduled_at)
                 : null,
             task.client_name,
-            task.team_name,
             task.assignee_name,
           ]
             .filter(Boolean)

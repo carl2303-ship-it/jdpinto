@@ -93,6 +93,9 @@ export function TechTaskDetail({ task, photos }: Props) {
           <p className="mt-1 text-sm text-slate-500">
             Agendada:{" "}
             {formatDateTime(task.scheduled_at ?? task.scheduled_date)}
+            {task.planned_duration_minutes
+              ? ` · Prevista ${formatDurationMinutes(task.planned_duration_minutes)}`
+              : ""}
             {task.start_time
               ? ` · Início ${formatDateTime(task.start_time)}`
               : ""}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isoToLocalDate, isoToLocalTime } from "@/lib/forms";
+import { isoToLocalDate, isoToLocalTime, localDateAndTimeToIso } from "@/lib/forms";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -12,6 +12,7 @@ type Props = {
   timeName: string;
   value?: string | null;
   required?: boolean;
+  onIsoChange?: (iso: string | null) => void;
 };
 
 const HOURS = Array.from({ length: 24 }, (_, i) =>
@@ -52,6 +53,7 @@ export function DateTime24Fields({
   timeName,
   value,
   required,
+  onIsoChange,
 }: Props) {
   const [date, setDate] = useState(() => parseParts(value).date);
   const [hour, setHour] = useState(() => parseParts(value).hour);
@@ -66,6 +68,15 @@ export function DateTime24Fields({
 
   const timeValue =
     hour !== "" && minute !== "" ? `${hour}:${minute}` : "";
+
+  function emit(nextDate: string, nextHour: string, nextMinute: string) {
+    if (!onIsoChange) return;
+    const t =
+      nextHour !== "" && nextMinute !== ""
+        ? `${nextHour}:${nextMinute}`
+        : "";
+    onIsoChange(localDateAndTimeToIso(nextDate, t));
+  }
 
   return (
     <fieldset className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -84,7 +95,11 @@ export function DateTime24Fields({
           name={dateName}
           type="date"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setDate(v);
+            emit(v, hour, minute);
+          }}
           required={required}
         />
       </div>
@@ -100,7 +115,11 @@ export function DateTime24Fields({
               aria-label={`${label} — hora`}
               value={hour}
               required={required}
-              onChange={(e) => setHour(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setHour(v);
+                emit(date, v, minute);
+              }}
               className={cn(
                 "h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-center font-mono text-base font-semibold tabular-nums",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-sky",
@@ -123,7 +142,11 @@ export function DateTime24Fields({
               aria-label={`${label} — minutos`}
               value={minute}
               required={required}
-              onChange={(e) => setMinute(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setMinute(v);
+                emit(date, hour, v);
+              }}
               className={cn(
                 "h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-center font-mono text-base font-semibold tabular-nums",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-sky",

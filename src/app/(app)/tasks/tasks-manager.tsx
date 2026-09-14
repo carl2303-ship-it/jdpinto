@@ -9,6 +9,7 @@ import type {
   Task,
   TaskStatus,
   Team,
+  TeamMember,
 } from "@/types/database";
 import { TASK_STATUS_LABELS } from "@/types/database";
 import { Button } from "@/components/ui/button";
@@ -26,13 +27,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  formatClientAddress,
   formatDateTime,
   formatDurationMinutes,
   mapsUrl,
 } from "@/lib/forms";
 import { DateTime24Fields } from "@/components/ui/date-time-24";
-import { createClientQuick } from "@/app/(app)/clients/actions";
+import {
+  assessCollaboratorAvailability,
+  assessTeamAvailability,
+} from "@/lib/team-availability";
+import { createClientFromTask } from "@/app/(app)/clients/actions";
 import { deleteTask, upsertTask, type ActionResult } from "./actions";
+import { cn } from "@/lib/utils";
 
 const initial: ActionResult | null = null;
 
@@ -47,6 +54,7 @@ type Props = {
   clients: Client[];
   teams: Team[];
   collaborators: Collaborator[];
+  memberships: TeamMember[];
 };
 
 function TaskFormFields({
@@ -54,54 +62,150 @@ function TaskFormFields({
   clients,
   teams,
   collaborators,
+  memberships,
+  allTasks,
   onClientsChange,
 }: {
   task?: TaskRow | null;
   clients: Client[];
   teams: Team[];
   collaborators: Collaborator[];
+  memberships: TeamMember[];
+  allTasks: TaskRow[];
   onClientsChange: (clients: Client[]) => void;
 }) {
   const [clientList, setClientList] = useState(clients);
+  const [clientMode, setClientMode] = useState<"existing" | "new">(
+    task?.client_id ? "existing" : "existing",
+  );
   const [clientId, setClientId] = useState(task?.client_id ?? "");
-  const [quickName, setQuickName] = useState("");
-  const [quickError, setQuickError] = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const [clientError, setClientError] = useState<string | null>(null);
+  const [newClient, setNewClient] = useState({
+    name: "",
+    contact_name: "",
+    phone: "",
+    street: "",
+    postal_code: "",
+    locality: "",
+  });
+  const [scheduledAt, setScheduledAt] = useState<string | null>(
+    task?.scheduled_at ?? null,
+  );
+  const [plannedHours, setPlannedHours] = useState(
+    task?.planned_duration_minutes != null
+      ? String(Math.floor(task.planned_duration_minutes / 60))
+      : "1",
+  );
+  const [plannedMins, setPlannedMins] = useState(
+    task?.planned_duration_minutes != null
+      ? String(task.planned_duration_minutes % 60)
+      : "0",
+  );
+  const [teamId, setTeamId] = useState(task?.assigned_team_id ?? "");
+  const [collaboratorId, setCollaboratorId] = useState(
+    task?.assigned_collaborator_id ?? "",
+  );
 
   useEffect(() => {
     setClientList(clients);
   }, [clients]);
 
-  async function addQuickClient() {
-    setQuickError(null);
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return clientList;
+    return clientList.filter((c) => {
+      const hay = [
+        c.name,
+        c.contact_name,
+        c.phone,
+        c.street,
+        c.postal_code,
+        c.locality,
+        c.address,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [clientList, clientSearch]);
+
+  const selectedClient = useMemo(
+    () => clientList.find((c) => c.id === clientId) ?? null,
+    [clientList, clientId],
+  );
+
+  const plannedMinutes = useMemo(() => {
+    const h = plannedHours === "" ? 0 : Number(plannedHours);
+    const m = plannedMins === "" ? 0 : Number(plannedMins);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    const total = Math.round(h * 60 + m);
+    return total > 0 ? total : null;
+  }, [plannedHours, plannedMins]);
+
+  const availability = useMemo(
+    () =>
+      assessTeamAvailability({
+        teams,
+        tasks: allTasks,
+        scheduledAt,
+        plannedMinutes,
+        excludeTaskId: task?.id ?? null,
+      }),
+    [teams, allTasks, scheduledAt, plannedMinutes, task?.id],
+  );
+
+  const collabAvailability = useMemo(
+    () =>
+      assessCollaboratorAvailability({
+        collaborators,
+        memberships,
+        tasks: allTasks,
+        scheduledAt,
+        plannedMinutes,
+        excludeTaskId: task?.id ?? null,
+      }),
+    [
+      collaborators,
+      memberships,
+      allTasks,
+      scheduledAt,
+      plannedMinutes,
+      task?.id,
+    ],
+  );
+
+  const selectedAvail = availability.find((a) => a.team.id === teamId);
+  const selectedCollabAvail = collabAvailability.find(
+    (a) => a.collaborator.id === collaboratorId,
+  );
+
+  async function createNewClient() {
+    setClientError(null);
     setCreating(true);
-    const result = await createClientQuick(quickName);
+    const result = await createClientFromTask(newClient);
     setCreating(false);
     if (!result.ok) {
-      setQuickError(result.error);
+      setClientError(result.error);
       return;
     }
-    const created: Client = {
-      id: result.id,
-      name: quickName.trim(),
-      email: null,
-      phone: null,
-      contact_name: null,
-      address: null,
-      street: null,
-      postal_code: null,
-      locality: null,
-      vat_number: null,
-      notes: null,
-      created_at: new Date().toISOString(),
-    };
-    const next = [...clientList, created].sort((a, b) =>
+    const next = [...clientList, result.client].sort((a, b) =>
       a.name.localeCompare(b.name),
     );
     setClientList(next);
     onClientsChange(next);
-    setClientId(result.id);
-    setQuickName("");
+    setClientId(result.client.id);
+    setClientMode("existing");
+    setNewClient({
+      name: "",
+      contact_name: "",
+      phone: "",
+      street: "",
+      postal_code: "",
+      locality: "",
+    });
   }
 
   return (
@@ -128,71 +232,157 @@ function TaskFormFields({
         />
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="client_id">Cliente</Label>
-        <Select
-          id="client_id"
-          name="client_id"
-          value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
-        >
-          <option value="">— Sem cliente —</option>
-          {clientList.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
-        <div className="flex gap-2 pt-1">
-          <Input
-            value={quickName}
-            onChange={(e) => setQuickName(e.target.value)}
-            placeholder="Criar cliente rápido…"
-          />
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={creating || !quickName.trim()}
-            onClick={addQuickClient}
-          >
-            {creating ? "…" : "Criar"}
-          </Button>
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label>Cliente *</Label>
+          <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium">
+            <button
+              type="button"
+              className={cn(
+                "rounded-md px-2.5 py-1.5",
+                clientMode === "existing"
+                  ? "bg-white text-brand-navy shadow-sm"
+                  : "text-slate-500",
+              )}
+              onClick={() => {
+                setClientMode("existing");
+                setClientError(null);
+              }}
+            >
+              Existente
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "rounded-md px-2.5 py-1.5",
+                clientMode === "new"
+                  ? "bg-white text-brand-navy shadow-sm"
+                  : "text-slate-500",
+              )}
+              onClick={() => {
+                setClientMode("new");
+                setClientError(null);
+              }}
+            >
+              Novo cliente
+            </button>
+          </div>
         </div>
-        {quickError && (
-          <p className="text-xs text-red-600">{quickError}</p>
+
+        {clientMode === "existing" ? (
+          <div className="space-y-2">
+            <Input
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+              placeholder="Pesquisar cliente (nome, morada, telefone…)"
+            />
+            <Select
+              id="client_id"
+              name="client_id"
+              value={clientId}
+              required
+              onChange={(e) => setClientId(e.target.value)}
+            >
+              <option value="">— Escolher cliente —</option>
+              {filteredClients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.locality ? ` · ${c.locality}` : ""}
+                </option>
+              ))}
+            </Select>
+            {selectedClient && (
+              <div className="rounded-lg border border-brand-sky/20 bg-brand-sky/5 px-3 py-2 text-sm text-slate-700">
+                <p className="font-medium text-brand-navy">
+                  {selectedClient.name}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-600">
+                  {[
+                    selectedClient.contact_name &&
+                      `Contacto: ${selectedClient.contact_name}`,
+                    selectedClient.phone,
+                    formatClientAddress(selectedClient),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "Sem contactos / morada no perfil"}
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <input type="hidden" name="client_id" value={clientId} />
+            <Input
+              placeholder="Nome do cliente *"
+              value={newClient.name}
+              onChange={(e) =>
+                setNewClient((s) => ({ ...s, name: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Pessoa de contacto"
+              value={newClient.contact_name}
+              onChange={(e) =>
+                setNewClient((s) => ({ ...s, contact_name: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Telefone"
+              type="tel"
+              value={newClient.phone}
+              onChange={(e) =>
+                setNewClient((s) => ({ ...s, phone: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="Rua"
+              value={newClient.street}
+              onChange={(e) =>
+                setNewClient((s) => ({ ...s, street: e.target.value }))
+              }
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                placeholder="Código postal"
+                value={newClient.postal_code}
+                onChange={(e) =>
+                  setNewClient((s) => ({ ...s, postal_code: e.target.value }))
+                }
+              />
+              <Input
+                placeholder="Localidade"
+                value={newClient.locality}
+                onChange={(e) =>
+                  setNewClient((s) => ({ ...s, locality: e.target.value }))
+                }
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              disabled={creating || !newClient.name.trim()}
+              onClick={createNewClient}
+            >
+              <Plus className="h-4 w-4" />
+              {creating ? "A criar…" : "Guardar cliente e usar nesta tarefa"}
+            </Button>
+            {clientId && clientMode === "new" && selectedClient && (
+              <p className="text-xs text-emerald-700">
+                Cliente «{selectedClient.name}» criado e selecionado.
+              </p>
+            )}
+            {!clientId && (
+              <p className="text-xs text-amber-700">
+                Guarda o cliente primeiro; a morada e contactos passam para a
+                tarefa automaticamente.
+              </p>
+            )}
+          </div>
         )}
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="address">Morada do serviço</Label>
-        <div className="flex gap-2">
-          <Input
-            id="address"
-            name="address"
-            defaultValue={task?.address ?? ""}
-            className="flex-1"
-          />
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="contact_name">Pessoa de contacto</Label>
-        <Input
-          id="contact_name"
-          name="contact_name"
-          defaultValue={task?.contact_name ?? ""}
-          placeholder="Nome da pessoa no local"
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="contact_phone">Telefone de contacto</Label>
-        <Input
-          id="contact_phone"
-          name="contact_phone"
-          type="tel"
-          defaultValue={task?.contact_phone ?? ""}
-        />
+        {clientError && (
+          <p className="text-xs text-red-600">{clientError}</p>
+        )}
       </div>
 
       <DateTime24Fields
@@ -201,11 +391,61 @@ function TaskFormFields({
         timeName="scheduled_time"
         value={task?.scheduled_at ?? null}
         required
+        onIsoChange={setScheduledAt}
       />
       <p className="-mt-1 text-xs text-slate-500">
-        Data e hora previstas. O técnico regista depois o início e o fim reais;
-        a duração é calculada automaticamente.
+        Data e hora previstas. A duração real é calculada quando o técnico
+        regista o fim.
       </p>
+
+      <div className="space-y-1.5">
+        <Label>Duração prevista *</Label>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label
+              htmlFor="planned_duration_hours"
+              className="text-xs font-normal text-slate-500"
+            >
+              Horas
+            </Label>
+            <Input
+              id="planned_duration_hours"
+              name="planned_duration_hours"
+              type="number"
+              min={0}
+              max={48}
+              step={1}
+              required
+              value={plannedHours}
+              onChange={(e) => setPlannedHours(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label
+              htmlFor="planned_duration_mins"
+              className="text-xs font-normal text-slate-500"
+            >
+              Minutos
+            </Label>
+            <Input
+              id="planned_duration_mins"
+              name="planned_duration_mins"
+              type="number"
+              min={0}
+              max={59}
+              step={5}
+              value={plannedMins}
+              onChange={(e) => setPlannedMins(e.target.value)}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-slate-500">
+          Usada para planear ocupação de equipas e colaboradores.
+          {plannedMinutes
+            ? ` · Total: ${formatDurationMinutes(plannedMinutes)}`
+            : ""}
+        </p>
+      </div>
 
       {(task?.start_time || task?.end_time) && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -214,11 +454,120 @@ function TaskFormFields({
             Início: {formatDateTime(task.start_time ?? null)}
             {task.end_time ? ` · Fim: ${formatDateTime(task.end_time)}` : ""}
             {task.duration_minutes
-              ? ` · Duração: ${formatDurationMinutes(task.duration_minutes)}`
+              ? ` · Duração real: ${formatDurationMinutes(task.duration_minutes)}`
               : ""}
           </p>
         </div>
       )}
+
+      <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+        <p className="text-sm font-semibold text-brand-navy">
+          Disponibilidade das equipas
+        </p>
+        {!scheduledAt || !plannedMinutes ? (
+          <p className="text-xs text-slate-500">
+            Preenche agendamento e duração prevista para ver quem está livre.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {availability.map(({ team, kind, message }) => (
+              <li key={team.id}>
+                <button
+                  type="button"
+                  onClick={() => setTeamId(team.id)}
+                  className={cn(
+                    "w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                    teamId === team.id
+                      ? "border-brand-sky ring-1 ring-brand-sky/40"
+                      : "border-slate-200 bg-white hover:bg-slate-50",
+                    kind === "available" && "border-l-4 border-l-emerald-500",
+                    kind === "busy" && "border-l-4 border-l-red-500",
+                    kind === "overrun" && "border-l-4 border-l-amber-500",
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: team.color_code || "#0ea5e9" }}
+                    />
+                    <span className="font-medium text-brand-navy">
+                      {team.name}
+                    </span>
+                    <span
+                      className={cn(
+                        "ml-auto text-[10px] font-semibold uppercase tracking-wide",
+                        kind === "available" && "text-emerald-700",
+                        kind === "busy" && "text-red-700",
+                        kind === "overrun" && "text-amber-700",
+                      )}
+                    >
+                      {kind === "available"
+                        ? "Livre"
+                        : kind === "busy"
+                          ? "Ocupada"
+                          : "Em atraso"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-600">{message}</p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+        <p className="text-sm font-semibold text-brand-navy">
+          Disponibilidade dos colaboradores
+        </p>
+        {!scheduledAt || !plannedMinutes ? (
+          <p className="text-xs text-slate-500">
+            Preenche agendamento e duração prevista para ver quem está livre.
+            Membros de uma equipa ocupada ficam ocupados.
+          </p>
+        ) : (
+          <ul className="max-h-56 space-y-2 overflow-y-auto">
+            {collabAvailability.map(({ collaborator, kind, message }) => (
+              <li key={collaborator.id}>
+                <button
+                  type="button"
+                  onClick={() => setCollaboratorId(collaborator.id)}
+                  className={cn(
+                    "w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                    collaboratorId === collaborator.id
+                      ? "border-brand-sky ring-1 ring-brand-sky/40"
+                      : "border-slate-200 bg-white hover:bg-slate-50",
+                    kind === "available" && "border-l-4 border-l-emerald-500",
+                    kind === "busy" && "border-l-4 border-l-red-500",
+                    kind === "overrun" && "border-l-4 border-l-amber-500",
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-brand-navy">
+                      {collaborator.full_name}
+                    </span>
+                    <span
+                      className={cn(
+                        "ml-auto text-[10px] font-semibold uppercase tracking-wide",
+                        kind === "available" && "text-emerald-700",
+                        kind === "busy" && "text-red-700",
+                        kind === "overrun" && "text-amber-700",
+                      )}
+                    >
+                      {kind === "available"
+                        ? "Livre"
+                        : kind === "busy"
+                          ? "Ocupado"
+                          : "Em atraso"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-600">{message}</p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
@@ -226,30 +575,78 @@ function TaskFormFields({
           <Select
             id="assigned_team_id"
             name="assigned_team_id"
-            defaultValue={task?.assigned_team_id ?? ""}
+            value={teamId}
+            onChange={(e) => setTeamId(e.target.value)}
           >
             <option value="">— Sem equipa —</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
+            {teams.map((t) => {
+              const a = availability.find((x) => x.team.id === t.id);
+              const tag =
+                a?.kind === "busy"
+                  ? " (ocupada)"
+                  : a?.kind === "overrun"
+                    ? " (em atraso)"
+                    : a?.kind === "available" && scheduledAt && plannedMinutes
+                      ? " (livre)"
+                      : "";
+              return (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {tag}
+                </option>
+              );
+            })}
           </Select>
+          {selectedAvail?.kind === "busy" && (
+            <p className="rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700">
+              {selectedAvail.message}
+            </p>
+          )}
+          {selectedAvail?.kind === "overrun" && (
+            <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+              {selectedAvail.message}
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="assigned_collaborator_id">Colaborador</Label>
           <Select
             id="assigned_collaborator_id"
             name="assigned_collaborator_id"
-            defaultValue={task?.assigned_collaborator_id ?? ""}
+            value={collaboratorId}
+            onChange={(e) => setCollaboratorId(e.target.value)}
           >
             <option value="">— Sem colaborador —</option>
-            {collaborators.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.full_name}
-              </option>
-            ))}
+            {collaborators.map((c) => {
+              const a = collabAvailability.find(
+                (x) => x.collaborator.id === c.id,
+              );
+              const tag =
+                a?.kind === "busy"
+                  ? " (ocupado)"
+                  : a?.kind === "overrun"
+                    ? " (em atraso)"
+                    : a?.kind === "available" && scheduledAt && plannedMinutes
+                      ? " (livre)"
+                      : "";
+              return (
+                <option key={c.id} value={c.id}>
+                  {c.full_name}
+                  {tag}
+                </option>
+              );
+            })}
           </Select>
+          {selectedCollabAvail?.kind === "busy" && (
+            <p className="rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700">
+              {selectedCollabAvail.message}
+            </p>
+          )}
+          {selectedCollabAvail?.kind === "overrun" && (
+            <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+              {selectedCollabAvail.message}
+            </p>
+          )}
         </div>
       </div>
 
@@ -276,6 +673,7 @@ export function TasksManager({
   clients: initialClients,
   teams,
   collaborators,
+  memberships,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -431,9 +829,13 @@ export function TasksManager({
                   <p className="text-sm text-slate-500">
                     {task.clients?.name ?? "Sem cliente"} · Agendada{" "}
                     {formatDateTime(task.scheduled_at ?? task.scheduled_date)}
-                    {task.duration_minutes
-                      ? ` · ${formatDurationMinutes(task.duration_minutes)}`
+                    {task.planned_duration_minutes
+                      ? ` · Prevista ${formatDurationMinutes(task.planned_duration_minutes)}`
                       : ""}
+                    {task.duration_minutes
+                      ? ` · Real ${formatDurationMinutes(task.duration_minutes)}`
+                      : ""}
+                    {task.teams?.name ? ` · ${task.teams.name}` : ""}
                     {task.start_time
                       ? ` · Início ${formatDateTime(task.start_time)}`
                       : ""}
@@ -493,7 +895,7 @@ export function TasksManager({
         open={open}
         onClose={closeDialog}
         title={editing ? "Editar intervenção" : "Nova intervenção"}
-        description="Cliente, morada, horário e atribuição."
+        description="Cliente, agendamento, duração e equipa."
         className="sm:max-w-xl"
       >
         <form action={action} className="space-y-4">
@@ -503,6 +905,8 @@ export function TasksManager({
             clients={clients}
             teams={teams}
             collaborators={collaborators}
+            memberships={memberships}
+            allTasks={tasks}
             onClientsChange={setClients}
           />
           {state && !state.ok && (

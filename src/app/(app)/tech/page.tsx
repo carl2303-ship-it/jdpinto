@@ -119,6 +119,9 @@ export default async function TechDashboardPage() {
                         {formatDateTime(
                           task.scheduled_at ?? task.scheduled_date,
                         )}
+                        {task.planned_duration_minutes
+                          ? ` · Prevista ${formatDurationMinutes(task.planned_duration_minutes)}`
+                          : ""}
                         {task.duration_minutes
                           ? ` · ${formatDurationMinutes(task.duration_minutes)}`
                           : ""}

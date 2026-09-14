@@ -16,6 +16,7 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/brand-logo";
 import { signOut } from "@/app/auth/actions";
 import {
   ROLE_LABELS,
@@ -106,10 +107,8 @@ export function AppSidebar({ collaborator, email }: Props) {
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-800 bg-brand-navy text-white lg:flex">
         <div className="flex h-16 items-center gap-3 border-b border-white/10 px-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-sky text-sm font-bold">
-            JD
-          </div>
-          <div>
+          <BrandLogo size={40} className="rounded-lg" />
+          <div className="min-w-0">
             <p className="text-sm font-semibold tracking-wide">JDPINTO</p>
             <p className="text-xs text-slate-400">Gestão de Intervenções</p>
           </div>
@@ -123,9 +122,7 @@ export function AppSidebar({ collaborator, email }: Props) {
       {/* Mobile top bar — full width row above content (parent is flex-col on mobile) */}
       <header className="sticky top-0 z-40 flex h-14 w-full shrink-0 items-center justify-between border-b border-slate-200 bg-brand-navy px-4 text-white lg:hidden">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-sky text-xs font-bold">
-            JD
-          </div>
+          <BrandLogo size={32} className="rounded-md" />
           <span className="text-sm font-semibold">JDPINTO</span>
         </div>
         <Button

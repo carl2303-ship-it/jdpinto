@@ -59,6 +59,8 @@ export type Task = {
   scheduled_date: string | null;
   /** Data e hora de agendamento (admin) */
   scheduled_at: string | null;
+  /** Duração prevista em minutos (planeamento) */
+  planned_duration_minutes: number | null;
   /** Duração real em minutos (calculada quando o técnico define o fim) */
   duration_minutes: number | null;
   start_time: string | null;
