@@ -1,3 +1,34 @@
+const APP_TIME_ZONE = "Europe/Lisbon";
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function partsInTimeZone(date: Date, timeZone: string) {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const map: Record<string, string> = {};
+  for (const p of fmt.formatToParts(date)) {
+    if (p.type !== "literal") map[p.type] = p.value;
+  }
+  return {
+    year: map.year!,
+    month: map.month!,
+    day: map.day!,
+    hour: map.hour!,
+    minute: map.minute!,
+    second: map.second ?? "00",
+  };
+}
+
 /** Convert datetime-local / ISO-ish value to ISO timestamptz, or null if empty. */
 export function localDateTimeToIso(value: string): string | null {
   if (!value) return null;
@@ -6,7 +37,10 @@ export function localDateTimeToIso(value: string): string | null {
   return date.toISOString();
 }
 
-/** Combine date (yyyy-mm-dd) + time (HH:mm, 24h) into ISO timestamptz. */
+/**
+ * Combina data (yyyy-mm-dd) + hora (HH:mm) como relógio de Portugal (Europe/Lisbon)
+ * e devolve ISO UTC. Não depende do fuso do servidor (Netlify = UTC).
+ */
 export function localDateAndTimeToIso(
   dateValue: string,
   timeValue: string,
@@ -14,35 +48,54 @@ export function localDateAndTimeToIso(
   const d = dateValue?.trim() ?? "";
   const t = timeValue?.trim() ?? "";
   if (!d || !t) return null;
-  const date = new Date(`${d}T${t}:00`);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
+  const [hhRaw = "", mmRaw = ""] = t.split(":");
+  const hh = pad2(Number(hhRaw));
+  const mm = pad2(Number(mmRaw));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Number(hhRaw)) || Number.isNaN(Number(mmRaw))) {
+    return null;
+  }
+
+  // Ajuste iterativo: converte "parede" Lisboa → UTC (respeita horário de verão)
+  let utcMs = Date.parse(`${d}T${hh}:${mm}:00Z`);
+  if (Number.isNaN(utcMs)) return null;
+  for (let i = 0; i < 3; i += 1) {
+    const p = partsInTimeZone(new Date(utcMs), APP_TIME_ZONE);
+    const asIfUtc = Date.parse(
+      `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`,
+    );
+    const target = Date.parse(`${d}T${hh}:${mm}:00Z`);
+    utcMs += target - asIfUtc;
+  }
+
+  const out = new Date(utcMs);
+  if (Number.isNaN(out.getTime())) return null;
+  return out.toISOString();
 }
 
-/** Convert ISO timestamptz to datetime-local input value. */
+/** Convert ISO timestamptz to datetime-local input value (Portugal). */
 export function isoToLocalDateTime(value: string | null | undefined): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const p = partsInTimeZone(date, APP_TIME_ZONE);
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
 export function isoToLocalDate(value: string | null | undefined): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const p = partsInTimeZone(date, APP_TIME_ZONE);
+  return `${p.year}-${p.month}-${p.day}`;
 }
 
-/** HH:mm in 24h local time */
+/** HH:mm em hora de Portugal */
 export function isoToLocalTime(value: string | null | undefined): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const p = partsInTimeZone(date, APP_TIME_ZONE);
+  return `${p.hour}:${p.minute}`;
 }
 
 export function emptyToNull(value: FormDataEntryValue | null): string | null {
@@ -109,6 +162,7 @@ export function formatDateTime(value: string | null) {
     dateStyle: "short",
     timeStyle: "short",
     hour12: false,
+    timeZone: APP_TIME_ZONE,
   }).format(new Date(value));
 }
 
@@ -132,17 +186,19 @@ export function formatDurationMinutes(minutes: number | null | undefined) {
   return `${h}h ${m}min`;
 }
 
-/** True se os dois ISO caem no mesmo minuto (hora local). */
+/** True se os dois ISO caem no mesmo minuto em Europe/Lisbon. */
 export function sameLocalMinute(a: string, b: string) {
   const da = new Date(a);
   const db = new Date(b);
   if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return false;
+  const pa = partsInTimeZone(da, APP_TIME_ZONE);
+  const pb = partsInTimeZone(db, APP_TIME_ZONE);
   return (
-    da.getFullYear() === db.getFullYear() &&
-    da.getMonth() === db.getMonth() &&
-    da.getDate() === db.getDate() &&
-    da.getHours() === db.getHours() &&
-    da.getMinutes() === db.getMinutes()
+    pa.year === pb.year &&
+    pa.month === pb.month &&
+    pa.day === pb.day &&
+    pa.hour === pb.hour &&
+    pa.minute === pb.minute
   );
 }
 
@@ -164,6 +220,7 @@ export function formatTime24(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: APP_TIME_ZONE,
   }).format(new Date(value));
 }
 
@@ -220,15 +277,9 @@ export function resolveTaskTimeRange(opts: {
     if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
       return { ok: false, error: "Data/hora inválida." };
     }
-    // Mesmo minuto (ex.: início 09:30:45 e fim 09:30): aceitar
+    // Mesmo minuto em Portugal: aceitar (ex.: início com segundos e fim ao minuto)
     if (endMs < startMs) {
-      const sameMinute =
-        new Date(start_time).getFullYear() === new Date(end_time).getFullYear() &&
-        new Date(start_time).getMonth() === new Date(end_time).getMonth() &&
-        new Date(start_time).getDate() === new Date(end_time).getDate() &&
-        new Date(start_time).getHours() === new Date(end_time).getHours() &&
-        new Date(start_time).getMinutes() === new Date(end_time).getMinutes();
-      if (sameMinute) {
+      if (sameLocalMinute(start_time, end_time)) {
         end_time = start_time;
       } else {
         return {

@@ -68,9 +68,11 @@ export async function saveTechIntervention(
     String(formData.get("end_time") ?? ""),
   );
 
-  // Preferir o início já gravado («Iniciar») se o formulário aponta para o mesmo minuto
+  // Ao concluir: mantém o início real do «Iniciar»; se o fim estiver vazio, usa agora.
   let startInput = formStart ?? access.task.start_time ?? null;
-  if (
+  if (completing && access.task.start_time) {
+    startInput = access.task.start_time;
+  } else if (
     access.task.start_time &&
     formStart &&
     sameLocalMinute(access.task.start_time, formStart)
@@ -78,9 +80,14 @@ export async function saveTechIntervention(
     startInput = access.task.start_time;
   }
 
+  const endInput =
+    completing && !formEnd
+      ? new Date().toISOString()
+      : (formEnd ?? access.task.end_time ?? null);
+
   const times = resolveTaskTimeRange({
     start: startInput,
-    end: formEnd ?? access.task.end_time ?? null,
+    end: endInput,
     completing,
   });
 

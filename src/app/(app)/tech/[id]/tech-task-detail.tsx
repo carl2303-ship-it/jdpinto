@@ -225,7 +225,6 @@ export function TechTaskDetail({ task, photos }: Props) {
         <CardContent>
           <form action={saveAction} className="space-y-3">
             <input type="hidden" name="id" value={task.id} />
-            <input type="hidden" name="intent" id="intent" value="save" />
 
             <div className="space-y-1.5">
               <Label htmlFor="description">Notas / descrição</Label>
@@ -250,6 +249,10 @@ export function TechTaskDetail({ task, photos }: Props) {
                 value={task.end_time}
               />
             </div>
+            <p className="text-xs text-slate-500">
+              Em «Concluir tarefa», se o fim estiver vazio, usa a hora atual
+              automaticamente.
+            </p>
 
             {task.start_time && task.end_time && (
               <p className="rounded-lg bg-brand-sky/10 px-3 py-2 text-sm font-medium text-brand-sky-dark">
@@ -282,29 +285,21 @@ export function TechTaskDetail({ task, photos }: Props) {
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="submit"
+                name="intent"
+                value="save"
                 disabled={savePending}
                 className="flex-1"
-                onClick={() => {
-                  const el = document.getElementById(
-                    "intent",
-                  ) as HTMLInputElement | null;
-                  if (el) el.value = "save";
-                }}
               >
                 {savePending ? "A guardar…" : "Guardar detalhes"}
               </Button>
               {task.status !== "completed" ? (
                 <Button
                   type="submit"
+                  name="intent"
+                  value="complete"
                   variant="success"
                   disabled={savePending}
                   className="flex-1"
-                  onClick={() => {
-                    const el = document.getElementById(
-                      "intent",
-                    ) as HTMLInputElement | null;
-                    if (el) el.value = "complete";
-                  }}
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   Concluir tarefa
