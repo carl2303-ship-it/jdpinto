@@ -153,6 +153,26 @@ export function formatTime24(value: string | null) {
   }).format(new Date(value));
 }
 
+/** Ex.: "sáb., 14/09/2026" — para cards do técnico */
+export function formatScheduleDateLabel(value: string | null | undefined) {
+  if (!value) return "Sem data";
+  const iso = value.includes("T") ? value : `${value.slice(0, 10)}T12:00:00`;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "Sem data";
+  return new Intl.DateTimeFormat("pt-PT", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+/** Hora agendada em destaque; "—" se só houver dia */
+export function formatScheduleTimeLabel(scheduledAt: string | null | undefined) {
+  if (!scheduledAt || !scheduledAt.includes("T")) return "—:—";
+  return formatTime24(scheduledAt);
+}
+
 /**
  * Garante end >= start.
  * Em conclusão: usa o fim do formulário; se faltar, usa agora.

@@ -8,6 +8,7 @@ import {
   localDateAndTimeToIso,
 } from "@/lib/forms";
 import { parsePlannedDurationFromForm } from "@/lib/team-availability";
+import { notifyTaskAssignees } from "@/lib/push-server";
 import type { TaskStatus } from "@/types/database";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -77,12 +78,50 @@ export async function upsertTask(
   payload.contact_phone = client.phone;
   payload.contact_name = client.contact_name;
 
+  let previousAssignee: {
+    assigned_collaborator_id: string | null;
+    assigned_team_id: string | null;
+  } | null = null;
+
+  if (id) {
+    const { data: prev } = await supabase
+      .from("tasks")
+      .select("assigned_collaborator_id, assigned_team_id")
+      .eq("id", id)
+      .maybeSingle();
+    previousAssignee = prev;
+  }
+
   const query = id
     ? supabase.from("tasks").update(payload).eq("id", id)
     : supabase.from("tasks").insert(payload);
 
-  const { error } = await query;
+  const { data: saved, error } = await query
+    .select("id, title, assigned_collaborator_id, assigned_team_id")
+    .single();
   if (error) return { ok: false, error: error.message };
+
+  const assigneeChanged =
+    !previousAssignee ||
+    previousAssignee.assigned_collaborator_id !==
+      saved.assigned_collaborator_id ||
+    previousAssignee.assigned_team_id !== saved.assigned_team_id;
+
+  if (
+    assigneeChanged &&
+    (saved.assigned_collaborator_id || saved.assigned_team_id)
+  ) {
+    try {
+      await notifyTaskAssignees({
+        taskId: saved.id,
+        title: saved.title,
+        assignedCollaboratorId: saved.assigned_collaborator_id,
+        assignedTeamId: saved.assigned_team_id,
+      });
+    } catch {
+      // Não falhar o save se o push falhar
+    }
+  }
 
   revalidatePath("/tasks");
   revalidatePath("/calendar");

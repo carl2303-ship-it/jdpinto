@@ -295,11 +295,14 @@ export function TeamManager({ collaborators, teams }: Props) {
               <Select
                 id="role"
                 name="role"
-                defaultValue={editingCollab?.role ?? "field_tech"}
+                defaultValue={
+                  editingCollab?.role === "manager"
+                    ? "admin"
+                    : (editingCollab?.role ?? "field_tech")
+                }
               >
                 <option value="admin">Administrador</option>
-                <option value="manager">Gestor</option>
-                <option value="field_tech">Técnico de Campo</option>
+                <option value="field_tech">Técnico</option>
               </Select>
             </div>
             <div className="space-y-1.5">

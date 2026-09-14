@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { InstallAppPrompt } from "@/components/pwa/install-app-prompt";
+import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 import "./globals.css";
 
 const inter = Inter({
@@ -48,6 +49,7 @@ export default function RootLayout({
     <html lang="pt" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full max-w-[100vw] overflow-x-hidden font-sans">
         {children}
+        <RegisterServiceWorker />
         <InstallAppPrompt />
       </body>
     </html>

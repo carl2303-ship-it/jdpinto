@@ -47,6 +47,17 @@ export type TeamMember = {
   collaborator_id: string;
 };
 
+export type PushSubscriptionRow = {
+  id: string;
+  collaborator_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -97,8 +108,8 @@ export const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
 
 export const ROLE_LABELS: Record<CollaboratorRole, string> = {
   admin: "Administrador",
-  manager: "Gestor",
-  field_tech: "Técnico de Campo",
+  manager: "Administrador", // legado — tratado como admin no UI
+  field_tech: "Técnico",
 };
 
 /** Link do calendário: admin edita se aberta; concluída → relatório/fotos. */

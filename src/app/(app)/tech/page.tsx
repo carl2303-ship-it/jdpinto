@@ -1,17 +1,7 @@
-import Link from "next/link";
-import { ChevronRight, MapPin } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getMyCollaborator, isOfficeRole } from "@/lib/auth";
 import type { Client, Task } from "@/types/database";
-import { StatusBadge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { formatDateTime, formatDurationMinutes } from "@/lib/forms";
+import { TechTaskList } from "@/components/tech/tech-task-list";
 
 export const metadata = { title: "As minhas tarefas" };
 
@@ -37,14 +27,15 @@ export default async function TechDashboardPage() {
     .select("team_id")
     .eq("collaborator_id", me.id);
   const teamIds = (memberships ?? []).map((m) => m.team_id);
+  const office = isOfficeRole(me.role);
 
   let query = supabase
     .from("tasks")
     .select("*")
     .neq("status", "cancelled")
-    .order("scheduled_date", { ascending: true, nullsFirst: false });
+    .order("scheduled_at", { ascending: true, nullsFirst: false });
 
-  if (!isOfficeRole(me.role)) {
+  if (!office) {
     const filters = [`assigned_collaborator_id.eq.${me.id}`];
     if (teamIds.length > 0) {
       filters.push(`assigned_team_id.in.(${teamIds.join(",")})`);
@@ -82,8 +73,7 @@ export default async function TechDashboardPage() {
     ...t,
     clients: t.client_id ? clientsMap.get(t.client_id) ?? null : null,
   }));
-  const open = tasks.filter((t) => t.status !== "completed");
-  const done = tasks.filter((t) => t.status === "completed");
+  const openCount = tasks.filter((t) => t.status !== "completed").length;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -92,85 +82,16 @@ export default async function TechDashboardPage() {
           Olá, {me.full_name.split(" ")[0]}
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          As tuas intervenções atribuídas · {open.length} em aberto
+          As tuas intervenções atribuídas · {openCount} em aberto
         </p>
       </div>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Em aberto
-        </h2>
-        {open.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-slate-500">
-              Sem tarefas atribuídas de momento.
-            </CardContent>
-          </Card>
-        ) : (
-          open.map((task) => (
-            <Link key={task.id} href={`/tech/${task.id}`} className="block">
-              <Card className="transition-shadow hover:shadow-md">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <CardTitle className="text-base">{task.title}</CardTitle>
-                      <CardDescription>
-                        {task.clients?.name ?? "Sem cliente"} ·{" "}
-                        {formatDateTime(
-                          task.scheduled_at ?? task.scheduled_date,
-                        )}
-                        {task.planned_duration_minutes
-                          ? ` · Prevista ${formatDurationMinutes(task.planned_duration_minutes)}`
-                          : ""}
-                        {task.duration_minutes
-                          ? ` · ${formatDurationMinutes(task.duration_minutes)}`
-                          : ""}
-                        {task.start_time
-                          ? ` · ${formatDateTime(task.start_time)}`
-                          : ""}
-                      </CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={task.status} />
-                      <ChevronRight className="h-4 w-4 text-slate-400" />
-                    </div>
-                  </div>
-                </CardHeader>
-                {task.address && (
-                  <CardContent className="pt-0">
-                    <p className="flex items-start gap-1.5 text-sm text-slate-600">
-                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      {task.address}
-                    </p>
-                  </CardContent>
-                )}
-              </Card>
-            </Link>
-          ))
-        )}
-      </section>
-
-      {done.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Concluídas
-          </h2>
-          {done.map((task) => (
-            <Link key={task.id} href={`/tech/${task.id}`} className="block opacity-80">
-              <Card>
-                <CardHeader className="py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="text-sm font-medium">
-                      {task.title}
-                    </CardTitle>
-                    <StatusBadge status={task.status} />
-                  </div>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </section>
-      )}
+      <TechTaskList
+        initialTasks={tasks}
+        collaboratorId={me.id}
+        teamIds={teamIds}
+        isOffice={office}
+      />
     </div>
   );
 }

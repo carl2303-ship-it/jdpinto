@@ -6,9 +6,11 @@ import { Bell, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Task } from "@/types/database";
 import {
+  broadcastTasksChanged,
   ensureNotificationPermission,
   playTaskAlertSound,
   showSystemNotification,
+  subscribePushNotifications,
 } from "@/lib/task-alert";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/forms";
@@ -40,6 +42,7 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
   const [alert, setAlert] = useState<AlertTask | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [live, setLive] = useState(false);
+  const [pushReady, setPushReady] = useState(false);
   const seenRef = useRef<Set<string>>(new Set());
   const teamSet = useRef(new Set(teamIds));
   const readyRef = useRef(false);
@@ -48,34 +51,32 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
     teamSet.current = new Set(teamIds);
   }, [teamIds]);
 
-  const triggerAlert = useCallback(
-    (task: Task) => {
-      const alertTask: AlertTask = {
-        id: task.id,
-        title: task.title,
-        address: task.address,
-        scheduled_at: task.scheduled_at,
-        start_time: task.start_time,
-      };
+  const triggerAlert = useCallback((task: Task) => {
+    const alertTask: AlertTask = {
+      id: task.id,
+      title: task.title,
+      address: task.address,
+      scheduled_at: task.scheduled_at,
+      start_time: task.start_time,
+    };
 
-      setAlert(alertTask);
-      playTaskAlertSound();
-      showSystemNotification(
-        "Nova intervenção JDPINTO",
-        task.title,
-        `/tech/${task.id}`,
-      );
+    setAlert(alertTask);
+    playTaskAlertSound();
+    void showSystemNotification(
+      "Nova intervenção JDPINTO",
+      task.title,
+      `/tech/${task.id}`,
+    );
+    broadcastTasksChanged(task.id);
 
-      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-        try {
-          navigator.vibrate([200, 80, 200, 80, 400]);
-        } catch {
-          // ignore
-        }
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      try {
+        navigator.vibrate([200, 80, 200, 80, 400]);
+      } catch {
+        // ignore
       }
-    },
-    [],
-  );
+    }
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -91,7 +92,13 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
       if (!task?.id || task.status === "cancelled") return;
 
       const nowMine = isAssignedToMe(task, collaboratorId, teamSet.current);
-      if (!nowMine) return;
+      if (!nowMine) {
+        // Removida de mim → atualizar lista
+        if (seenRef.current.has(task.id)) {
+          broadcastTasksChanged(task.id);
+        }
+        return;
+      }
 
       // Nova atribuição (UPDATE): alerta mesmo se o id já estava "visto"
       if (event === "UPDATE" && oldRow) {
@@ -105,12 +112,19 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
           triggerAlert(task);
           return;
         }
+        // Alteração numa tarefa já minha → só refrescar lista
+        broadcastTasksChanged(task.id);
+        seenRef.current.add(task.id);
+        return;
       }
 
       const alreadySeen = seenRef.current.has(task.id);
       seenRef.current.add(task.id);
 
-      if (event === "UPDATE" && alreadySeen) return;
+      if (event === "UPDATE" && alreadySeen) {
+        broadcastTasksChanged(task.id);
+        return;
+      }
       if (event === "INSERT" || !alreadySeen) {
         triggerAlert(task);
       }
@@ -138,15 +152,28 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
     async function pollForNew() {
       if (!readyRef.current || cancelled) return;
       const rows = await fetchAssignedIds();
+      let changed = false;
+      const currentIds = new Set(rows.map((r) => r.id));
+
       for (const task of rows) {
         if (seenRef.current.has(task.id)) continue;
         seenRef.current.add(task.id);
         triggerAlert(task);
+        changed = true;
       }
+
+      // Remoções / conclusão noutra sessão
+      for (const id of [...seenRef.current]) {
+        if (!currentIds.has(id)) {
+          seenRef.current.delete(id);
+          changed = true;
+        }
+      }
+
+      if (changed) broadcastTasksChanged();
     }
 
     async function boot() {
-      // Marca como vistas as tarefas já atribuídas (evita popup ao abrir a app)
       const existing = await fetchAssignedIds();
       if (cancelled) return;
       for (const row of existing) {
@@ -183,10 +210,15 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
           }
         });
 
-      // Reserva: se o Realtime falhar ou o telemóvel suspender o WS
       pollTimer = setInterval(() => {
-        void pollForNew();
-      }, 12_000);
+        if (document.visibilityState === "visible") void pollForNew();
+      }, 8_000);
+
+      document.addEventListener("visibilitychange", onVisible);
+    }
+
+    function onVisible() {
+      if (document.visibilityState === "visible") void pollForNew();
     }
 
     void boot();
@@ -196,13 +228,29 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
       readyRef.current = false;
       if (pollTimer) clearInterval(pollTimer);
       if (channel) void supabase.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [collaboratorId, triggerAlert]);
 
-  function unlockAudio() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (localStorage.getItem("jdpinto-alerts-on") === "1") {
+      setAudioUnlocked(true);
+      void (async () => {
+        await ensureNotificationPermission();
+        const push = await subscribePushNotifications(collaboratorId);
+        setPushReady(push.ok);
+      })();
+    }
+  }, [collaboratorId]);
+
+  async function unlockAudio() {
     setAudioUnlocked(true);
+    localStorage.setItem("jdpinto-alerts-on", "1");
     playTaskAlertSound();
-    void ensureNotificationPermission();
+    await ensureNotificationPermission();
+    const push = await subscribePushNotifications(collaboratorId);
+    setPushReady(push.ok);
   }
 
   return (
@@ -210,15 +258,15 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
       {!audioUnlocked && (
         <button
           type="button"
-          onClick={unlockAudio}
-          className="fixed bottom-20 right-3 z-40 max-w-[11rem] rounded-full bg-brand-navy px-3 py-2 text-left text-xs font-medium text-white shadow-lg lg:bottom-6"
+          onClick={() => void unlockAudio()}
+          className="fixed bottom-20 right-3 z-40 max-w-[12rem] rounded-full bg-brand-navy px-3 py-2 text-left text-xs font-medium text-white shadow-lg lg:bottom-6"
         >
           <span className="inline-flex items-start gap-1.5">
             <Bell className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
               Ativar alertas
               <span className="mt-0.5 block text-[10px] font-normal text-white/70">
-                {live ? "ligado" : "a ligar…"}
+                {live ? "ligado · push" : "a ligar…"}
               </span>
             </span>
           </span>
@@ -227,13 +275,13 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
 
       {audioUnlocked && (
         <div
-          className="fixed bottom-20 right-3 z-30 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-medium text-slate-500 shadow border border-slate-200 lg:bottom-6"
+          className="fixed bottom-20 right-3 z-30 rounded-full border border-slate-200 bg-white/95 px-2.5 py-1 text-[10px] font-medium text-slate-500 shadow lg:bottom-6"
           title="Alertas de novas tarefas"
         >
           <span
-            className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-500" : "bg-amber-400"}`}
+            className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${live || pushReady ? "bg-emerald-500" : "bg-amber-400"}`}
           />
-          Alertas {live ? "ativos" : "em espera"}
+          Alertas {pushReady ? "push ativos" : live ? "ativos" : "em espera"}
         </div>
       )}
 

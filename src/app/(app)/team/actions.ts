@@ -68,6 +68,10 @@ export async function upsertCollaborator(
       "active") as CollaboratorStatus,
   };
 
+  if (payload.role !== "admin" && payload.role !== "field_tech") {
+    payload.role = "field_tech";
+  }
+
   if (!payload.full_name) {
     return { ok: false, error: "O nome é obrigatório." };
   }
