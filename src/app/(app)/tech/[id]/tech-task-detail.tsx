@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   CheckCircle2,
   CheckSquare,
+  History,
   MapPin,
   Navigation,
   Phone,
@@ -254,6 +255,15 @@ export function TechTaskDetail({
             <Play className="h-4 w-4" />
             Iniciar intervenção
           </Button>
+        )}
+        {task.client_id && (
+          <Link
+            href={`/tech/historico/${task.client_id}?from=${task.id}`}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-brand-navy hover:bg-slate-50"
+          >
+            <History className="h-4 w-4" />
+            Histórico
+          </Link>
         )}
         {address && (
           <>
