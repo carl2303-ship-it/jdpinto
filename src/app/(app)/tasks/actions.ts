@@ -9,16 +9,51 @@ import {
 } from "@/lib/forms";
 import { parsePlannedDurationFromForm } from "@/lib/team-availability";
 import { notifyTaskAssignees } from "@/lib/push-server";
-import type { TaskStatus } from "@/types/database";
+import type { PhotoType, TaskServiceType, TaskStatus } from "@/types/database";
+import {
+  serviceTypeRequiresDate,
+  serviceTypeRequiresSlot,
+} from "@/types/database";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
+async function uploadAdminPhotos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  taskId: string,
+  formData: FormData,
+) {
+  const files = formData
+    .getAll("admin_photos")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return null as string | null;
+
+  for (const file of files) {
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${taskId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("task-photos")
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (uploadError) return uploadError.message;
+
+    const { error } = await supabase.from("task_photos").insert({
+      task_id: taskId,
+      photo_url: path,
+      photo_type: "briefing" as PhotoType,
+    });
+    if (error) return error.message;
+  }
+  return null;
+}
+
 function taskPayload(formData: FormData) {
   const scheduledDate = emptyToNull(formData.get("scheduled_date"));
+  const scheduledTime = String(formData.get("scheduled_time") ?? "").trim();
   const scheduledAt = localDateAndTimeToIso(
     String(formData.get("scheduled_date") ?? ""),
-    String(formData.get("scheduled_time") ?? ""),
+    scheduledTime,
   );
+  const serviceType = (emptyToNull(formData.get("service_type")) ??
+    "agendado_com_marcacao") as TaskServiceType;
 
   return {
     title: String(formData.get("title") ?? "").trim(),
@@ -27,6 +62,7 @@ function taskPayload(formData: FormData) {
     address: null as string | null,
     contact_name: null as string | null,
     contact_phone: null as string | null,
+    service_type: serviceType,
     scheduled_date: scheduledDate,
     scheduled_at: scheduledAt,
     planned_duration_minutes: parsePlannedDurationFromForm(formData),
@@ -49,20 +85,35 @@ export async function upsertTask(
   if (!payload.title) {
     return { ok: false, error: "O título é obrigatório." };
   }
-  if (!payload.scheduled_date || !payload.scheduled_at) {
-    return {
-      ok: false,
-      error: "A data e hora de agendamento são obrigatórias.",
-    };
-  }
-  if (!payload.planned_duration_minutes) {
-    return {
-      ok: false,
-      error: "A duração prevista é obrigatória (ajuda a planear as equipas).",
-    };
-  }
   if (!payload.client_id) {
     return { ok: false, error: "Seleciona ou cria um cliente." };
+  }
+
+  if (serviceTypeRequiresSlot(payload.service_type)) {
+    if (!payload.scheduled_date || !payload.scheduled_at) {
+      return {
+        ok: false,
+        error: "Com marcação: data e hora de agendamento são obrigatórias.",
+      };
+    }
+    if (!payload.planned_duration_minutes) {
+      return {
+        ok: false,
+        error: "Com marcação: a duração prevista é obrigatória.",
+      };
+    }
+  } else if (serviceTypeRequiresDate(payload.service_type)) {
+    if (!payload.scheduled_date) {
+      return {
+        ok: false,
+        error: "Agendado sem marcação: indica pelo menos o dia.",
+      };
+    }
+  }
+
+  // Sem data/hora: limpar campos vazios (evitar inconsistências)
+  if (!payload.scheduled_date) {
+    payload.scheduled_at = null;
   }
 
   // Morada e contactos vêm sempre do cliente
@@ -81,15 +132,23 @@ export async function upsertTask(
   let previousAssignee: {
     assigned_collaborator_id: string | null;
     assigned_team_id: string | null;
+    scheduled_at: string | null;
   } | null = null;
 
   if (id) {
     const { data: prev } = await supabase
       .from("tasks")
-      .select("assigned_collaborator_id, assigned_team_id")
+      .select("assigned_collaborator_id, assigned_team_id, scheduled_at")
       .eq("id", id)
       .maybeSingle();
     previousAssignee = prev;
+    // Se a marcação mudou, reinicia lembretes 10/30
+    if (prev && prev.scheduled_at !== payload.scheduled_at) {
+      Object.assign(payload, {
+        reminder_30_sent_at: null,
+        reminder_10_sent_at: null,
+      });
+    }
   }
 
   const query = id
@@ -100,6 +159,14 @@ export async function upsertTask(
     .select("id, title, assigned_collaborator_id, assigned_team_id")
     .single();
   if (error) return { ok: false, error: error.message };
+
+  const photoError = await uploadAdminPhotos(supabase, saved.id, formData);
+  if (photoError) {
+    return {
+      ok: false,
+      error: `Serviço guardado, mas falhou o upload de imagens: ${photoError}`,
+    };
+  }
 
   const assigneeChanged =
     !previousAssignee ||
@@ -127,6 +194,7 @@ export async function upsertTask(
   revalidatePath("/calendar");
   revalidatePath("/mobile");
   revalidatePath("/tech");
+  revalidatePath(`/tech/${saved.id}`);
   return { ok: true };
 }
 

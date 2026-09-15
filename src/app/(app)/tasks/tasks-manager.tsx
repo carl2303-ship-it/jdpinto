@@ -2,23 +2,31 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
 import type {
   Client,
   Collaborator,
   Task,
+  TaskServiceType,
   TaskStatus,
   Team,
   TeamMember,
 } from "@/types/database";
-import { TASK_STATUS_LABELS } from "@/types/database";
+import {
+  TASK_SERVICE_TYPE_LABELS,
+  TASK_STATUS_LABELS,
+  serviceTypeRequiresDate,
+  serviceTypeRequiresSlot,
+  taskDetailHref,
+} from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Dialog } from "@/components/ui/dialog";
-import { StatusBadge } from "@/components/ui/badge";
+import { TaskStateBadge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -107,6 +115,12 @@ function TaskFormFields({
   const [collaboratorId, setCollaboratorId] = useState(
     task?.assigned_collaborator_id ?? "",
   );
+  const [serviceType, setServiceType] = useState<TaskServiceType>(
+    task?.service_type ?? "agendado_com_marcacao",
+  );
+
+  const needsSlot = serviceTypeRequiresSlot(serviceType);
+  const needsDate = serviceTypeRequiresDate(serviceType);
 
   useEffect(() => {
     setClientList(clients);
@@ -230,6 +244,32 @@ function TaskFormFields({
           name="description"
           defaultValue={task?.description ?? ""}
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="service_type">Tipo de serviço *</Label>
+        <Select
+          id="service_type"
+          name="service_type"
+          value={serviceType}
+          onChange={(e) => setServiceType(e.target.value as TaskServiceType)}
+          required
+        >
+          {(Object.keys(TASK_SERVICE_TYPE_LABELS) as TaskServiceType[]).map(
+            (t) => (
+              <option key={t} value={t}>
+                {TASK_SERVICE_TYPE_LABELS[t]}
+              </option>
+            ),
+          )}
+        </Select>
+        <p className="text-xs text-slate-500">
+          {needsSlot
+            ? "Exige data, hora e duração prevista."
+            : needsDate
+              ? "Exige o dia; a hora é opcional."
+              : "Data/hora opcionais — ir quando possível ou conforme prioridade."}
+        </p>
       </div>
 
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
@@ -386,20 +426,28 @@ function TaskFormFields({
       </div>
 
       <DateTime24Fields
-        label="Agendamento *"
+        label={needsSlot ? "Agendamento *" : needsDate ? "Dia *" : "Agendamento (opcional)"}
         dateName="scheduled_date"
         timeName="scheduled_time"
-        value={task?.scheduled_at ?? null}
-        required
+        value={
+          task?.scheduled_at ??
+          task?.scheduled_date ??
+          null
+        }
+        required={needsDate}
+        requireTime={needsSlot}
         onIsoChange={setScheduledAt}
       />
       <p className="-mt-1 text-xs text-slate-500">
-        Data e hora previstas. A duração real é calculada quando o técnico
-        regista o fim.
+        {needsSlot
+          ? "Data e hora marcadas com o cliente. A duração real é registada pelo técnico."
+          : needsDate
+            ? "Indica o dia previsto. A hora pode ficar em branco (sem marcação)."
+            : "Podes deixar sem data — o técnico faz quando for possível."}
       </p>
 
       <div className="space-y-1.5">
-        <Label>Duração prevista *</Label>
+        <Label>Duração prevista {needsSlot ? "*" : "(opcional)"}</Label>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label
@@ -415,7 +463,7 @@ function TaskFormFields({
               min={0}
               max={48}
               step={1}
-              required
+              required={needsSlot}
               value={plannedHours}
               onChange={(e) => setPlannedHours(e.target.value)}
             />
@@ -651,6 +699,22 @@ function TaskFormFields({
       </div>
 
       <div className="space-y-1.5">
+        <Label htmlFor="admin_photos">Imagens do serviço (opcional)</Label>
+        <input
+          id="admin_photos"
+          name="admin_photos"
+          type="file"
+          accept="image/*"
+          multiple
+          className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-sky/10 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-sky-dark"
+        />
+        <p className="text-xs text-slate-500">
+          Anexos para o técnico (fotos do local, esquema, etc.). Podes adicionar
+          várias.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
         <Label htmlFor="status">Estado</Label>
         <Select
           id="status"
@@ -694,6 +758,10 @@ export function TasksManager({
 
     if (editId) {
       const task = tasks.find((t) => t.id === editId) ?? null;
+      if (task?.status === "completed") {
+        router.replace(taskDetailHref(task.id, "tasks"), { scroll: false });
+        return;
+      }
       if (task) {
         setEditing(task);
         setOpen(true);
@@ -824,11 +892,18 @@ export function TasksManager({
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium text-brand-navy">{task.title}</p>
-                    <StatusBadge status={task.status} />
+                    <TaskStateBadge
+                      status={task.status}
+                      serviceType={task.service_type}
+                    />
                   </div>
                   <p className="text-sm text-slate-500">
-                    {task.clients?.name ?? "Sem cliente"} · Agendada{" "}
-                    {formatDateTime(task.scheduled_at ?? task.scheduled_date)}
+                    {task.clients?.name ?? "Sem cliente"}
+                    {task.scheduled_at
+                      ? ` · ${formatDateTime(task.scheduled_at)}`
+                      : task.scheduled_date
+                        ? ` · Dia ${task.scheduled_date}`
+                        : " · Sem data marcada"}
                     {task.planned_duration_minutes
                       ? ` · Prevista ${formatDurationMinutes(task.planned_duration_minutes)}`
                       : ""}
@@ -863,19 +938,31 @@ export function TasksManager({
                       Maps
                     </a>
                   )}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setEditing(task);
-                      setOpen(true);
-                      router.replace(`/tasks?edit=${task.id}`, { scroll: false });
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Editar
-                  </Button>
+                  {task.status === "completed" ? (
+                    <Link
+                      href={taskDetailHref(task.id, "tasks")}
+                      className="inline-flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-brand-navy hover:bg-slate-50"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Ver
+                    </Link>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setEditing(task);
+                        setOpen(true);
+                        router.replace(`/tasks?edit=${task.id}`, {
+                          scroll: false,
+                        });
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Editar
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
@@ -895,7 +982,7 @@ export function TasksManager({
         open={open}
         onClose={closeDialog}
         title={editing ? "Editar intervenção" : "Nova intervenção"}
-        description="Cliente, agendamento, duração e equipa."
+        description="Cliente, tipo de serviço, agendamento, imagens e equipa."
         className="sm:max-w-xl"
       >
         <form action={action} className="space-y-4">

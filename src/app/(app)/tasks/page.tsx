@@ -21,6 +21,7 @@ export default async function TasksPage() {
         .select(
           "*, clients:client_id(id,name), teams:assigned_team_id(id,name,color_code), collaborators:assigned_collaborator_id(id,full_name)",
         )
+        .eq("office_stage", "active")
         .order("scheduled_date", { ascending: true, nullsFirst: false }),
       supabase.from("clients").select("*").order("name"),
       supabase.from("teams").select("*").order("name"),

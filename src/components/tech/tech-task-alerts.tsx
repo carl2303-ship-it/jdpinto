@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Bell, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Task } from "@/types/database";
+import { taskDetailHref } from "@/types/database";
 import {
   broadcastTasksChanged,
   ensureNotificationPermission,
@@ -15,12 +16,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/forms";
 
+type AlertKind = "new" | "reminder30" | "reminder10";
+
 type AlertTask = {
   id: string;
   title: string;
   address: string | null;
   scheduled_at: string | null;
   start_time: string | null;
+  kind: AlertKind;
 };
 
 type Props = {
@@ -38,6 +42,10 @@ function isAssignedToMe(
   return false;
 }
 
+function reminderKey(taskId: string, kind: "30" | "10") {
+  return `jdpinto-rem-${kind}-${taskId}`;
+}
+
 export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
   const [alert, setAlert] = useState<AlertTask | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
@@ -53,32 +61,42 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
     teamSet.current = new Set(teamIds);
   }, [teamIds]);
 
-  const triggerAlert = useCallback((task: Task) => {
-    const alertTask: AlertTask = {
-      id: task.id,
-      title: task.title,
-      address: task.address,
-      scheduled_at: task.scheduled_at,
-      start_time: task.start_time,
-    };
+  const triggerAlert = useCallback(
+    (task: Task, kind: AlertKind = "new") => {
+      const alertTask: AlertTask = {
+        id: task.id,
+        title: task.title,
+        address: task.address,
+        scheduled_at: task.scheduled_at,
+        start_time: task.start_time,
+        kind,
+      };
 
-    setAlert(alertTask);
-    playTaskAlertSound();
-    void showSystemNotification(
-      "Nova intervenção JDPINTO",
-      task.title,
-      `/tech/${task.id}`,
-    );
-    broadcastTasksChanged(task.id);
+      setAlert(alertTask);
+      playTaskAlertSound();
+      const notifTitle =
+        kind === "reminder30"
+          ? "Aviso · daqui a ~30 min"
+          : kind === "reminder10"
+            ? "Aviso · daqui a ~10 min"
+            : "Nova intervenção JDPINTO";
+      void showSystemNotification(
+        notifTitle,
+        task.title,
+        taskDetailHref(task.id, "tech"),
+      );
+      if (kind === "new") broadcastTasksChanged(task.id);
 
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      try {
-        navigator.vibrate([200, 80, 200, 80, 400]);
-      } catch {
-        // ignore
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try {
+          navigator.vibrate([200, 80, 200, 80, 400]);
+        } catch {
+          // ignore
+        }
       }
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     const supabase = createClient();
@@ -111,7 +129,7 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
         );
         if (!wasMine && nowMine) {
           seenRef.current.add(task.id);
-          triggerAlert(task);
+          triggerAlert(task, "new");
           return;
         }
         // Alteração numa tarefa já minha → só refrescar lista
@@ -128,7 +146,7 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
         return;
       }
       if (event === "INSERT" || !alreadySeen) {
-        triggerAlert(task);
+        triggerAlert(task, "new");
       }
     }
 
@@ -151,6 +169,38 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
       return (data ?? []) as Task[];
     }
 
+    function checkReminders(rows: Task[]) {
+      if (typeof window === "undefined") return;
+      for (const task of rows) {
+        if (
+          task.status === "completed" ||
+          task.status === "cancelled" ||
+          !task.scheduled_at
+        ) {
+          continue;
+        }
+        const mins =
+          (new Date(task.scheduled_at).getTime() - Date.now()) / 60_000;
+        if (Number.isNaN(mins)) continue;
+
+        if (
+          mins <= 35 &&
+          mins > 10 &&
+          !localStorage.getItem(reminderKey(task.id, "30"))
+        ) {
+          localStorage.setItem(reminderKey(task.id, "30"), "1");
+          triggerAlert(task, "reminder30");
+        } else if (
+          mins <= 12 &&
+          mins > -5 &&
+          !localStorage.getItem(reminderKey(task.id, "10"))
+        ) {
+          localStorage.setItem(reminderKey(task.id, "10"), "1");
+          triggerAlert(task, "reminder10");
+        }
+      }
+    }
+
     async function pollForNew() {
       if (!readyRef.current || cancelled) return;
       const rows = await fetchAssignedIds();
@@ -160,11 +210,10 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
       for (const task of rows) {
         if (seenRef.current.has(task.id)) continue;
         seenRef.current.add(task.id);
-        triggerAlert(task);
+        triggerAlert(task, "new");
         changed = true;
       }
 
-      // Remoções / conclusão noutra sessão
       for (const id of [...seenRef.current]) {
         if (!currentIds.has(id)) {
           seenRef.current.delete(id);
@@ -172,6 +221,7 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
         }
       }
 
+      checkReminders(rows);
       if (changed) broadcastTasksChanged();
     }
 
@@ -182,6 +232,7 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
         seenRef.current.add(row.id);
       }
       readyRef.current = true;
+      checkReminders(existing);
 
       await ensureNotificationPermission();
 
@@ -320,7 +371,11 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-brand-sky-dark">
-                  Nova tarefa atribuída
+                  {alert.kind === "reminder30"
+                    ? "Aviso · ~30 minutos"
+                    : alert.kind === "reminder10"
+                      ? "Aviso · ~10 minutos"
+                      : "Nova tarefa atribuída"}
                 </p>
                 <p className="mt-0.5 text-base font-semibold text-brand-navy">
                   {alert.title}
@@ -331,7 +386,7 @@ export function TechTaskAlerts({ collaboratorId, teamIds }: Props) {
                 </p>
                 <div className="mt-3 flex gap-2">
                   <Link
-                    href={`/tech/${alert.id}`}
+                    href={taskDetailHref(alert.id, "tech")}
                     onClick={() => setAlert(null)}
                     className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-brand-sky text-sm font-medium text-white hover:bg-brand-sky-dark"
                   >

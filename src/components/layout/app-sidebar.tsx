@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation";
 import {
   CalendarDays,
   ClipboardList,
+  FileCheck2,
   LogOut,
   Menu,
+  Receipt,
   Smartphone,
   Users,
   UsersRound,
@@ -28,6 +30,8 @@ import { isOfficeRole } from "@/lib/auth-shared";
 const OFFICE_NAV = [
   { href: "/calendar", label: "Calendário", icon: CalendarDays },
   { href: "/tasks", label: "Intervenções", icon: ClipboardList },
+  { href: "/a-faturar", label: "A faturar", icon: Receipt },
+  { href: "/terminadas", label: "Terminadas", icon: FileCheck2 },
   { href: "/clients", label: "Clientes", icon: Users },
   { href: "/team", label: "Equipas", icon: UsersRound },
   { href: "/tech", label: "Vista técnico", icon: Smartphone },

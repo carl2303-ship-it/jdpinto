@@ -52,6 +52,7 @@ export default async function CalendarPage() {
     start_time: t.start_time,
     end_time: t.end_time,
     status: t.status,
+    service_type: t.service_type,
     address: t.address,
     client_name: t.client_id ? clients.get(t.client_id) ?? null : null,
     team_name: t.assigned_team_id

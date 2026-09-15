@@ -19,14 +19,18 @@ import {
 } from "date-fns";
 import { pt } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import type { Task, TaskStatus } from "@/types/database";
+import type { Task, TaskServiceType } from "@/types/database";
 import {
-  TASK_STATUS_COLORS,
+  TASK_PROGRESS_STATUSES,
+  TASK_SERVICE_TYPE_SHORT,
   TASK_STATUS_LABELS,
+  TASK_SERVICE_TYPE_LABELS,
   calendarTaskHref,
+  isTaskProgressStatus,
+  taskChipColor,
 } from "@/types/database";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/badge";
+import { ServiceTypeBadge, StatusBadge, TaskStateBadge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -46,6 +50,7 @@ export type CalendarTask = Pick<
   | "start_time"
   | "end_time"
   | "status"
+  | "service_type"
   | "address"
 > & {
   client_name?: string | null;
@@ -152,7 +157,14 @@ export function CalendarView({ tasks }: { tasks: CalendarTask[] }) {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(Object.keys(TASK_STATUS_LABELS) as TaskStatus[]).map((s) => (
+        {(Object.keys(TASK_SERVICE_TYPE_SHORT) as TaskServiceType[]).map(
+          (t) => (
+            <ServiceTypeBadge key={t} type={t} />
+          ),
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {TASK_PROGRESS_STATUSES.map((s) => (
           <StatusBadge key={s} status={s} />
         ))}
       </div>
@@ -216,18 +228,18 @@ export function CalendarView({ tasks }: { tasks: CalendarTask[] }) {
         <CardContent className="pt-0">
           {view === "month" && (
             <div className="w-full overflow-x-auto">
-              <div className="min-w-[320px]">
+              <div className="min-w-[640px] lg:min-w-0">
                 <div className="grid grid-cols-7 gap-px border-b border-slate-200 pb-2">
                   {WEEKDAYS.map((d) => (
                     <div
                       key={d}
-                      className="text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs"
+                      className="text-center text-xs font-semibold uppercase tracking-wide text-slate-400 lg:text-sm"
                     >
                       {d}
                     </div>
                   ))}
                 </div>
-                <div className="mt-1 grid grid-cols-7 gap-px rounded-lg bg-slate-100">
+                <div className="mt-1 grid grid-cols-7 gap-px rounded-lg bg-slate-100 lg:min-h-[min(78dvh,920px)] lg:auto-rows-fr">
                   {monthDays.map((day) => {
                     const key = format(day, "yyyy-MM-dd");
                     const dayTasks = byDay.get(key) ?? [];
@@ -236,62 +248,68 @@ export function CalendarView({ tasks }: { tasks: CalendarTask[] }) {
                       <div
                         key={key}
                         className={cn(
-                          "min-h-[72px] bg-white p-1 text-left sm:min-h-[96px] sm:p-1.5",
+                          "flex min-h-[118px] flex-col bg-white p-1.5 text-left sm:min-h-[140px] sm:p-2 lg:min-h-0 lg:p-2.5",
                           !inMonth && "bg-slate-50/80 text-slate-400",
                           isToday(day) && "ring-1 ring-inset ring-brand-sky",
                         )}
                       >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCursor(day);
-                            setView("day");
-                          }}
-                          className={cn(
-                            "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium hover:bg-slate-100",
-                            isToday(day) && "bg-brand-sky text-white hover:bg-brand-sky-dark",
+                        <div className="flex items-center justify-between gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCursor(day);
+                              setView("day");
+                            }}
+                            className={cn(
+                              "inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium hover:bg-slate-100",
+                              isToday(day) &&
+                                "bg-brand-sky text-white hover:bg-brand-sky-dark",
+                            )}
+                            aria-label={`Ver dia ${format(day, "d MMMM", { locale: pt })}`}
+                          >
+                            {format(day, "d")}
+                          </button>
+                          {dayTasks.length > 0 && (
+                            <span className="text-[10px] font-medium text-slate-400 lg:text-xs">
+                              {dayTasks.length}
+                            </span>
                           )}
-                          aria-label={`Ver dia ${format(day, "d MMMM", { locale: pt })}`}
-                        >
-                          {format(day, "d")}
-                        </button>
-                        <div className="mt-0.5 space-y-0.5">
-                          {dayTasks.slice(0, 3).map((task) => (
+                        </div>
+                        <div className="mt-1 min-h-0 flex-1 space-y-1 overflow-y-auto">
+                          {dayTasks.map((task) => (
                             <Link
                               key={task.id}
                               href={calendarTaskHref(task)}
-                              className="block truncate rounded px-1 py-0.5 text-[10px] font-medium text-white hover:opacity-90 sm:text-[11px]"
+                              className="block truncate rounded px-1.5 py-1 text-[11px] font-medium leading-snug text-white hover:opacity-90 lg:text-xs lg:py-1.5"
                               style={{
-                                backgroundColor:
-                                  TASK_STATUS_COLORS[task.status],
+                                backgroundColor: taskChipColor(task),
                               }}
-                              title={
-                                task.team_name
-                                  ? `${task.title} · ${task.team_name}`
-                                  : task.title
-                              }
+                              title={[
+                                task.title,
+                                isTaskProgressStatus(task.status)
+                                  ? TASK_STATUS_LABELS[task.status]
+                                  : task.service_type
+                                    ? TASK_SERVICE_TYPE_LABELS[task.service_type]
+                                    : null,
+                                task.team_name,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
                             >
                               {task.start_time
                                 ? `${formatTime24(task.start_time)} `
                                 : task.scheduled_at
                                   ? `${formatTime24(task.scheduled_at)} `
                                   : ""}
+                              {isTaskProgressStatus(task.status)
+                                ? `${TASK_STATUS_LABELS[task.status]} · `
+                                : task.service_type
+                                  ? `${TASK_SERVICE_TYPE_SHORT[task.service_type]} · `
+                                  : ""}
                               {task.team_name ? `${task.team_name}: ` : ""}
                               {task.title}
                             </Link>
                           ))}
-                          {dayTasks.length > 3 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCursor(day);
-                                setView("day");
-                              }}
-                              className="text-[10px] text-slate-400 hover:text-slate-600"
-                            >
-                              +{dayTasks.length - 3}
-                            </button>
-                          )}
                         </div>
                       </div>
                     );
@@ -387,12 +405,17 @@ function TaskRow({
     >
       <span
         className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
-        style={{ backgroundColor: TASK_STATUS_COLORS[task.status] }}
+        style={{
+          backgroundColor: taskChipColor(task),
+        }}
       />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="font-medium text-brand-navy">{task.title}</p>
-          <StatusBadge status={task.status} />
+          <TaskStateBadge
+            status={task.status}
+            serviceType={task.service_type}
+          />
           {task.team_name && (
             <span className="rounded-md bg-brand-navy/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
               {task.team_name}

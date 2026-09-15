@@ -16,46 +16,20 @@ function configureWebPush() {
   return true;
 }
 
-/** Notifica colaboradores (e membros da equipa) via Web Push — funciona em 2.º plano. */
-export async function notifyTaskAssignees(opts: {
-  taskId: string;
-  title: string;
-  assignedCollaboratorId: string | null;
-  assignedTeamId: string | null;
-}) {
-  if (!configureWebPush()) return;
+export async function sendPushToCollaborators(
+  collaboratorIds: string[],
+  payload: PushPayload,
+) {
+  if (!configureWebPush() || collaboratorIds.length === 0) return;
 
   const admin = createAdminClient();
-  const recipientIds = new Set<string>();
-
-  if (opts.assignedCollaboratorId) {
-    recipientIds.add(opts.assignedCollaboratorId);
-  }
-
-  if (opts.assignedTeamId) {
-    const { data: members } = await admin
-      .from("team_members")
-      .select("collaborator_id")
-      .eq("team_id", opts.assignedTeamId);
-    for (const m of members ?? []) {
-      recipientIds.add(m.collaborator_id);
-    }
-  }
-
-  if (recipientIds.size === 0) return;
-
   const { data: subs } = await admin
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
-    .in("collaborator_id", [...recipientIds]);
+    .in("collaborator_id", collaboratorIds);
 
   if (!subs?.length) return;
 
-  const payload: PushPayload = {
-    title: "Nova intervenção JDPINTO",
-    body: opts.title,
-    url: `/tech/${opts.taskId}`,
-  };
   const body = JSON.stringify(payload);
 
   await Promise.all(
@@ -74,11 +48,43 @@ export async function notifyTaskAssignees(opts: {
           err && typeof err === "object" && "statusCode" in err
             ? Number((err as { statusCode: number }).statusCode)
             : 0;
-        // Subscrição expirada / inválida
         if (status === 404 || status === 410) {
           await admin.from("push_subscriptions").delete().eq("id", sub.id);
         }
       }
     }),
   );
+}
+
+/** Notifica colaboradores (e membros da equipa) via Web Push — funciona em 2.º plano. */
+export async function notifyTaskAssignees(opts: {
+  taskId: string;
+  title: string;
+  assignedCollaboratorId: string | null;
+  assignedTeamId: string | null;
+}) {
+  const recipientIds = new Set<string>();
+
+  if (opts.assignedCollaboratorId) {
+    recipientIds.add(opts.assignedCollaboratorId);
+  }
+
+  if (opts.assignedTeamId) {
+    const admin = createAdminClient();
+    const { data: members } = await admin
+      .from("team_members")
+      .select("collaborator_id")
+      .eq("team_id", opts.assignedTeamId);
+    for (const m of members ?? []) {
+      recipientIds.add(m.collaborator_id);
+    }
+  }
+
+  if (recipientIds.size === 0) return;
+
+  await sendPushToCollaborators([...recipientIds], {
+    title: "Nova intervenção JDPINTO",
+    body: opts.title,
+    url: `/tech/${opts.taskId}`,
+  });
 }

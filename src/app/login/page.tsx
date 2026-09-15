@@ -18,7 +18,7 @@ export default function LoginPage() {
             <BrandLogo size={112} priority className="rounded-2xl" />
           </div>
           <CardDescription>
-            Gestão de Intervenções — autenticação Supabase
+            Gestão de Intervenções
           </CardDescription>
         </CardHeader>
         <CardContent>

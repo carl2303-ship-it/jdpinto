@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { StatusBadge } from "@/components/ui/badge";
+import { TaskStateBadge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -120,7 +120,10 @@ export function MobileToday({ tasks }: { tasks: TaskRow[] }) {
                       : ""}
                   </CardDescription>
                 </button>
-                <StatusBadge status={task.status} />
+                <TaskStateBadge
+                  status={task.status}
+                  serviceType={task.service_type}
+                />
               </div>
             </CardHeader>
             <CardContent className="space-y-3">

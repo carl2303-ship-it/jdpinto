@@ -18,9 +18,9 @@ export function BottomNav({ techOnly = false }: { techOnly?: boolean }) {
     const items = [
       { href: "/calendar", label: "Agenda" },
       { href: "/tasks", label: "Tarefas" },
+      { href: "/a-faturar", label: "Faturar" },
+      { href: "/terminadas", label: "Fim" },
       { href: "/tech", label: "Campo" },
-      { href: "/clients", label: "Clientes" },
-      { href: "/team", label: "Equipas" },
     ];
     return (
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">

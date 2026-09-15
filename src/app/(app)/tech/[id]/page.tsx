@@ -5,7 +5,10 @@ import type { Client, Task, TaskPhoto } from "@/types/database";
 import { formatClientAddress } from "@/lib/forms";
 import { TechTaskDetail } from "./tech-task-detail";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+};
 
 type ClientInfo = Pick<
   Client,
@@ -24,8 +27,9 @@ export async function generateMetadata({ params }: Props) {
   return { title: `Intervenção ${id.slice(0, 8)}` };
 }
 
-export default async function TechTaskPage({ params }: Props) {
+export default async function TechTaskPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const { from } = await searchParams;
   const supabase = await createClient();
   const me = await getMyCollaborator();
 
@@ -91,5 +95,12 @@ export default async function TechTaskPage({ params }: Props) {
     }),
   );
 
-  return <TechTaskDetail task={displayTask} photos={withUrls} />;
+  return (
+    <TechTaskDetail
+      task={displayTask}
+      photos={withUrls}
+      isOffice={isOfficeRole(me.role)}
+      from={from ?? null}
+    />
+  );
 }

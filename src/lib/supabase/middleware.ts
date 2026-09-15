@@ -3,7 +3,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { homePathForRole, isOfficeRole } from "@/lib/auth-shared";
 import type { Collaborator } from "@/types/database";
 
-const OFFICE_ONLY = ["/calendar", "/clients", "/tasks", "/team"];
+const OFFICE_ONLY = [
+  "/calendar",
+  "/clients",
+  "/tasks",
+  "/team",
+  "/a-faturar",
+  "/terminadas",
+  "/billing",
+];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });

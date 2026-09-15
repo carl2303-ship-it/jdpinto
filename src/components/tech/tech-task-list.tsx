@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CalendarDays, ChevronRight, Clock, MapPin } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Client, Task } from "@/types/database";
-import { StatusBadge } from "@/components/ui/badge";
+import { TaskStateBadge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -18,6 +18,7 @@ import {
   formatScheduleTimeLabel,
 } from "@/lib/forms";
 import { cn } from "@/lib/utils";
+import { TASK_SERVICE_TYPE_SHORT, taskDetailHref } from "@/types/database";
 
 export type TechTaskRow = Task & {
   clients?: Pick<Client, "id" | "name"> | null;
@@ -32,8 +33,16 @@ type Props = {
 
 function ScheduleBlock({ task }: { task: TechTaskRow }) {
   const when = task.scheduled_at ?? task.scheduled_date;
-  const dateLabel = formatScheduleDateLabel(when);
-  const timeLabel = formatScheduleTimeLabel(task.scheduled_at);
+  const dateLabel = when ? formatScheduleDateLabel(when) : "Sem data";
+  const timeLabel = task.scheduled_at
+    ? formatScheduleTimeLabel(task.scheduled_at)
+    : task.service_type === "sem_marcacao"
+      ? "Quando possível"
+      : task.service_type === "urgente"
+        ? "Urgente"
+        : task.service_type === "nao_urgente"
+          ? "Não urgente"
+          : "Sem hora";
 
   return (
     <div className="flex items-stretch gap-3 rounded-xl bg-brand-navy px-3 py-3 text-white">
@@ -41,10 +50,22 @@ function ScheduleBlock({ task }: { task: TechTaskRow }) {
         <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-white/70">
           <CalendarDays className="h-3.5 w-3.5 shrink-0" />
           {dateLabel}
+          {task.service_type ? (
+            <span className="ml-1 rounded bg-white/15 px-1.5 py-0.5 normal-case tracking-normal">
+              {TASK_SERVICE_TYPE_SHORT[task.service_type]}
+            </span>
+          ) : null}
         </p>
         <p className="mt-1 flex items-baseline gap-2">
           <Clock className="h-5 w-5 shrink-0 text-brand-sky" />
-          <span className="text-3xl font-bold tabular-nums tracking-tight">
+          <span
+            className={cn(
+              "font-bold tracking-tight",
+              task.scheduled_at
+                ? "text-3xl tabular-nums"
+                : "text-lg leading-tight",
+            )}
+          >
             {timeLabel}
           </span>
         </p>
@@ -74,12 +95,15 @@ function TaskCard({
 }) {
   if (compact) {
     return (
-      <Link href={`/tech/${task.id}`} className="block opacity-80">
+      <Link href={taskDetailHref(task.id, "tech")} className="block opacity-80">
         <Card>
           <CardHeader className="py-3">
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="text-sm font-medium">{task.title}</CardTitle>
-              <StatusBadge status={task.status} />
+              <TaskStateBadge
+                status={task.status}
+                serviceType={task.service_type}
+              />
             </div>
           </CardHeader>
         </Card>
@@ -88,7 +112,7 @@ function TaskCard({
   }
 
   return (
-    <Link href={`/tech/${task.id}`} className="block">
+    <Link href={taskDetailHref(task.id, "tech")} className="block">
       <Card
         className={cn(
           "overflow-hidden transition-shadow hover:shadow-md",
@@ -110,7 +134,10 @@ function TaskCard({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2 pt-0.5">
-              <StatusBadge status={task.status} />
+              <TaskStateBadge
+                status={task.status}
+                serviceType={task.service_type}
+              />
               <ChevronRight className="h-5 w-5 text-slate-400" />
             </div>
           </div>
@@ -201,7 +228,23 @@ export function TechTaskList({
     };
   }, [reload]);
 
-  const open = tasks.filter((t) => t.status !== "completed");
+  const open = tasks
+    .filter((t) => t.status !== "completed")
+    .sort((a, b) => {
+      const rank = (t: TechTaskRow) => {
+        if (t.service_type === "urgente") return 0;
+        if (t.scheduled_at) return 1;
+        if (t.scheduled_date) return 2;
+        if (t.service_type === "sem_marcacao") return 3;
+        if (t.service_type === "nao_urgente") return 4;
+        return 5;
+      };
+      const d = rank(a) - rank(b);
+      if (d !== 0) return d;
+      const aKey = a.scheduled_at ?? a.scheduled_date ?? "";
+      const bKey = b.scheduled_at ?? b.scheduled_date ?? "";
+      return aKey.localeCompare(bKey);
+    });
   const done = tasks.filter((t) => t.status === "completed");
 
   return (

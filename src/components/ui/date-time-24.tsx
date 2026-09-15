@@ -11,7 +11,10 @@ type Props = {
   dateName: string;
   timeName: string;
   value?: string | null;
+  /** Data obrigatória */
   required?: boolean;
+  /** Hora obrigatória (default = required) */
+  requireTime?: boolean;
   onIsoChange?: (iso: string | null) => void;
 };
 
@@ -33,6 +36,11 @@ function snapMinute(m: string) {
 }
 
 function parseParts(value?: string | null) {
+  if (!value) return { date: "", hour: "", minute: "" };
+  // Só dia (yyyy-mm-dd) — sem hora
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return { date: value.trim(), hour: "", minute: "" };
+  }
   const date = isoToLocalDate(value);
   const time = isoToLocalTime(value);
   const [h = "", m = ""] = time.split(":");
@@ -53,8 +61,10 @@ export function DateTime24Fields({
   timeName,
   value,
   required,
+  requireTime,
   onIsoChange,
 }: Props) {
+  const timeRequired = requireTime ?? required;
   const [date, setDate] = useState(() => parseParts(value).date);
   const [hour, setHour] = useState(() => parseParts(value).hour);
   const [minute, setMinute] = useState(() => parseParts(value).minute);
@@ -114,7 +124,7 @@ export function DateTime24Fields({
             <select
               aria-label={`${label} — hora`}
               value={hour}
-              required={required}
+              required={timeRequired}
               onChange={(e) => {
                 const v = e.target.value;
                 setHour(v);
@@ -141,7 +151,7 @@ export function DateTime24Fields({
             <select
               aria-label={`${label} — minutos`}
               value={minute}
-              required={required}
+              required={timeRequired}
               onChange={(e) => {
                 const v = e.target.value;
                 setMinute(v);

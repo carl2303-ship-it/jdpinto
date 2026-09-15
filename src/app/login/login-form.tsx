@@ -295,7 +295,7 @@ export function LoginForm() {
         <p className="text-center text-xs text-slate-500">
           {mode === "register"
             ? "A primeira conta torna-se Administrador. Contas seguintes têm de ser criadas por um admin."
-            : "Usa o email e password da tua conta Supabase Auth."}
+            : "Usa o email e a password da tua conta."}
         </p>
       )}
     </form>
