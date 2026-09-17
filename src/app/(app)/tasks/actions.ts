@@ -7,6 +7,11 @@ import {
   formatClientAddress,
   localDateAndTimeToIso,
 } from "@/lib/forms";
+import {
+  attachmentContentType,
+  formDataFiles,
+  isAllowedAttachment,
+} from "@/lib/attachments";
 import { parsePlannedDurationFromForm } from "@/lib/team-availability";
 import { notifyTaskAssignees } from "@/lib/push-server";
 import type { PhotoType, TaskServiceType, TaskStatus } from "@/types/database";
@@ -22,25 +27,42 @@ async function uploadAdminPhotos(
   taskId: string,
   formData: FormData,
 ) {
-  const files = formData
-    .getAll("admin_photos")
-    .filter((f): f is File => f instanceof File && f.size > 0);
+  const files = formDataFiles(formData, "admin_photos");
   if (files.length === 0) return null as string | null;
 
   for (const file of files) {
-    const ext = file.name.split(".").pop() || "jpg";
+    if (!isAllowedAttachment(file)) {
+      return `Ficheiro não suportado: ${file.name}. Usa imagem ou PDF.`;
+    }
+    const ext = file.name.split(".").pop() || "bin";
     const path = `${taskId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("task-photos")
-      .upload(path, file, { contentType: file.type, upsert: false });
+      .upload(path, file, {
+        contentType: attachmentContentType(file),
+        upsert: false,
+      });
     if (uploadError) return uploadError.message;
 
     const { error } = await supabase.from("task_photos").insert({
       task_id: taskId,
       photo_url: path,
       photo_type: "briefing" as PhotoType,
+      file_name: file.name,
     });
-    if (error) return error.message;
+    if (error) {
+      // Compatível se a coluna file_name ainda não existir
+      if (/file_name/i.test(error.message)) {
+        const retry = await supabase.from("task_photos").insert({
+          task_id: taskId,
+          photo_url: path,
+          photo_type: "briefing" as PhotoType,
+        });
+        if (retry.error) return retry.error.message;
+      } else {
+        return error.message;
+      }
+    }
   }
   return null;
 }
@@ -164,7 +186,7 @@ export async function upsertTask(
   if (photoError) {
     return {
       ok: false,
-      error: `Serviço guardado, mas falhou o upload de imagens: ${photoError}`,
+      error: `Serviço guardado, mas falhou o upload de anexos: ${photoError}`,
     };
   }
 
@@ -248,19 +270,25 @@ export async function uploadTaskPhoto(
   formData: FormData,
 ): Promise<ActionResult> {
   const supabase = await createClient();
-  const file = formData.get("photo");
+  const file = formDataFiles(formData, "photo")[0];
   const photoType = emptyToNull(formData.get("photo_type")) ?? "evidence";
 
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: "Seleciona uma fotografia." };
+  if (!file) {
+    return { ok: false, error: "Seleciona uma fotografia ou PDF." };
+  }
+  if (!isAllowedAttachment(file)) {
+    return { ok: false, error: "Usa imagem (JPG/PNG/WebP) ou PDF." };
   }
 
-  const ext = file.name.split(".").pop() || "jpg";
+  const ext = file.name.split(".").pop() || "bin";
   const path = `${taskId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from("task-photos")
-    .upload(path, file, { contentType: file.type, upsert: false });
+    .upload(path, file, {
+      contentType: attachmentContentType(file),
+      upsert: false,
+    });
 
   if (uploadError) return { ok: false, error: uploadError.message };
 
@@ -268,9 +296,21 @@ export async function uploadTaskPhoto(
     task_id: taskId,
     photo_url: path,
     photo_type: photoType,
+    file_name: file.name,
   });
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    if (/file_name/i.test(error.message)) {
+      const retry = await supabase.from("task_photos").insert({
+        task_id: taskId,
+        photo_url: path,
+        photo_type: photoType,
+      });
+      if (retry.error) return { ok: false, error: retry.error.message };
+    } else {
+      return { ok: false, error: error.message };
+    }
+  }
 
   revalidatePath("/mobile");
   revalidatePath("/tasks");

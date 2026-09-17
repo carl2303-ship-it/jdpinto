@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMyCollaborator } from "@/lib/auth";
 import { emptyToNull, localDateAndTimeToIso, resolveTaskTimeRange, durationMinutesBetween, sameLocalMinute } from "@/lib/forms";
+import {
+  attachmentContentType,
+  formDataFiles,
+  isAllowedAttachment,
+} from "@/lib/attachments";
 import type { PhotoType, TaskStatus } from "@/types/database";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -170,21 +175,28 @@ export async function uploadTechPhotos(
 
   const photoType = (emptyToNull(formData.get("photo_type")) ??
     "evidence") as PhotoType;
-  const files = formData
-    .getAll("photos")
-    .filter((f): f is File => f instanceof File && f.size > 0);
+  const files = formDataFiles(formData, "photos");
 
   if (files.length === 0) {
-    return { ok: false, error: "Seleciona pelo menos uma fotografia." };
+    return { ok: false, error: "Seleciona pelo menos um ficheiro (imagem ou PDF)." };
   }
 
   for (const file of files) {
-    const ext = file.name.split(".").pop() || "jpg";
+    if (!isAllowedAttachment(file)) {
+      return {
+        ok: false,
+        error: `Ficheiro não suportado: ${file.name}. Usa imagem ou PDF.`,
+      };
+    }
+    const ext = file.name.split(".").pop() || "bin";
     const path = `${taskId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
     const { error: uploadError } = await access.supabase.storage
       .from("task-photos")
-      .upload(path, file, { contentType: file.type, upsert: false });
+      .upload(path, file, {
+        contentType: attachmentContentType(file),
+        upsert: false,
+      });
 
     if (uploadError) return { ok: false, error: uploadError.message };
 
@@ -192,9 +204,21 @@ export async function uploadTechPhotos(
       task_id: taskId,
       photo_url: path,
       photo_type: photoType,
+      file_name: file.name,
     });
 
-    if (error) return { ok: false, error: error.message };
+    if (error) {
+      if (/file_name/i.test(error.message)) {
+        const retry = await access.supabase.from("task_photos").insert({
+          task_id: taskId,
+          photo_url: path,
+          photo_type: photoType,
+        });
+        if (retry.error) return { ok: false, error: retry.error.message };
+      } else {
+        return { ok: false, error: error.message };
+      }
+    }
   }
 
   revalidatePath(`/tech/${taskId}`);

@@ -15,12 +15,13 @@ import {
   User,
   X,
 } from "lucide-react";
-import type { Client, PhotoType, Task, TaskPhoto } from "@/types/database";
+import type { Client, Task, TaskPhoto } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { TaskStateBadge } from "@/components/ui/badge";
+import { AttachmentGrid } from "@/components/tech/attachment-grid";
 import { DateTime24Fields } from "@/components/ui/date-time-24";
 import {
   Card,
@@ -31,7 +32,6 @@ import {
 } from "@/components/ui/card";
 import { formatDateTime, formatDurationMinutes, formatClientAddress, mapsUrl, wazeUrl, durationMinutesBetween } from "@/lib/forms";
 import {
-  PHOTO_TYPE_LABELS,
   TASK_SERVICE_TYPE_LABELS,
   closeTaskHref,
 } from "@/types/database";
@@ -42,6 +42,7 @@ import {
   type ActionResult,
 } from "@/app/(app)/tech/actions";
 import { markTaskViewed } from "@/app/(app)/billing/actions";
+import { isPdfFile } from "@/lib/attachments";
 
 type ClientInfo = Pick<
   Client,
@@ -88,6 +89,8 @@ export function TechTaskDetail({
   const address =
     task.address || formatClientAddress(task.client) || "";
   const phone = task.contact_phone || task.client?.phone || "";
+  const officeAttachments = photos.filter((p) => p.photo_type === "briefing");
+  const fieldPhotos = photos.filter((p) => p.photo_type !== "briefing");
 
   useEffect(() => {
     if (saveState?.ok || photoState?.ok) router.refresh();
@@ -199,6 +202,20 @@ export function TechTaskDetail({
           </div>
         </CardContent>
       </Card>
+
+      {officeAttachments.length > 0 && (
+        <Card className="border-amber-200/80 bg-amber-50/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Anexos do escritório</CardTitle>
+            <CardDescription>
+              Imagens e PDFs enviados pela administração para esta intervenção.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AttachmentGrid items={officeAttachments} />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {isOffice &&
@@ -400,39 +417,13 @@ export function TechTaskDetail({
 
       <Card>
         <CardHeader>
-          <CardTitle>Fotografias</CardTitle>
+          <CardTitle>Fotografias e anexos</CardTitle>
           <CardDescription>
-            Anexos do escritório, antes/depois ou evidência — upload múltiplo.
+            Antes/depois, evidência ou PDF — podes enviar vários ficheiros.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {photos.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {photos.map((p) => (
-                <figure
-                  key={p.id}
-                  className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
-                >
-                  {p.signedUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.signedUrl}
-                      alt={p.photo_type}
-                      className="aspect-square w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex aspect-square items-center justify-center text-xs text-slate-400">
-                      Sem preview
-                    </div>
-                  )}
-                  <figcaption className="px-2 py-1 text-xs text-slate-500">
-                    {PHOTO_TYPE_LABELS[p.photo_type as PhotoType] ??
-                      p.photo_type}
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-          )}
+          <AttachmentGrid items={fieldPhotos} />
 
           <form action={photoAction} className="space-y-3">
             <input type="hidden" name="task_id" value={task.id} />
@@ -451,7 +442,7 @@ export function TechTaskDetail({
                 id="photos"
                 name="photos"
                 type="file"
-                accept="image/*"
+                accept="image/*,.pdf,application/pdf"
                 multiple
                 className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-sky/10 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-sky-dark"
                 onChange={(e) => {
@@ -461,7 +452,9 @@ export function TechTaskDetail({
                     return;
                   }
                   setPreviews(
-                    Array.from(files).map((f) => URL.createObjectURL(f)),
+                    Array.from(files)
+                      .filter((f) => !isPdfFile(f.name, f.type))
+                      .map((f) => URL.createObjectURL(f)),
                   );
                 }}
               />
@@ -483,11 +476,11 @@ export function TechTaskDetail({
               <p className="text-sm text-red-600">{photoState.error}</p>
             )}
             {photoState?.ok && (
-              <p className="text-sm text-status-completed">Fotos enviadas.</p>
+              <p className="text-sm text-status-completed">Ficheiros enviados.</p>
             )}
             <Button type="submit" variant="secondary" disabled={photoPending}>
               <Upload className="h-4 w-4" />
-              {photoPending ? "A enviar…" : "Adicionar fotos"}
+              {photoPending ? "A enviar…" : "Adicionar ficheiros"}
             </Button>
           </form>
         </CardContent>

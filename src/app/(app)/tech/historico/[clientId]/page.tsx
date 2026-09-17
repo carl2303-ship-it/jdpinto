@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Camera, Clock } from "lucide-react";
+import { ArrowLeft, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMyCollaborator, isOfficeRole } from "@/lib/auth";
@@ -8,6 +8,7 @@ import type { Client, Task, TaskPhoto } from "@/types/database";
 import {
   TaskStateBadge,
 } from "@/components/ui/badge";
+import { AttachmentGrid } from "@/components/tech/attachment-grid";
 import {
   Card,
   CardContent,
@@ -19,7 +20,7 @@ import {
   formatDateTime,
   formatDurationMinutes,
 } from "@/lib/forms";
-import { PHOTO_TYPE_LABELS, taskDetailHref } from "@/types/database";
+import { taskDetailHref } from "@/types/database";
 
 type Props = {
   params: Promise<{ clientId: string }>;
@@ -196,39 +197,17 @@ export default async function ClientHistoryPage({
                 )}
                 {task.photos.length > 0 && (
                   <div>
-                    <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
-                      <Camera className="h-3.5 w-3.5" />
-                      Fotos ({task.photos.length})
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Anexos ({task.photos.length})
                     </p>
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                      {task.photos.map((p) =>
-                        p.signedUrl ? (
-                          <a
-                            key={p.id}
-                            href={p.signedUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-                          >
-                            <img
-                              src={p.signedUrl}
-                              alt={PHOTO_TYPE_LABELS[p.photo_type]}
-                              className="h-full w-full object-cover transition group-hover:opacity-90"
-                            />
-                            <span className="absolute bottom-0 inset-x-0 bg-black/55 px-1 py-0.5 text-[10px] text-white">
-                              {PHOTO_TYPE_LABELS[p.photo_type]}
-                            </span>
-                          </a>
-                        ) : null,
-                      )}
-                    </div>
+                    <AttachmentGrid items={task.photos} />
                   </div>
                 )}
                 {!task.report_notes &&
                   !task.description &&
                   task.photos.length === 0 && (
                     <p className="text-sm text-slate-400">
-                      Sem notas nem fotos nesta intervenção.
+                      Sem notas nem anexos nesta intervenção.
                     </p>
                   )}
               </CardContent>

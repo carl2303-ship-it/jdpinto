@@ -699,18 +699,17 @@ function TaskFormFields({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="admin_photos">Imagens do serviço (opcional)</Label>
+        <Label htmlFor="admin_photos">Anexos do serviço (opcional)</Label>
         <input
           id="admin_photos"
           name="admin_photos"
           type="file"
-          accept="image/*"
+          accept="image/*,.pdf,application/pdf"
           multiple
           className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-sky/10 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-sky-dark"
         />
         <p className="text-xs text-slate-500">
-          Anexos para o técnico (fotos do local, esquema, etc.). Podes adicionar
-          várias.
+          Imagens ou PDF para o técnico (fotos do local, esquema, planta, etc.).
         </p>
       </div>
 

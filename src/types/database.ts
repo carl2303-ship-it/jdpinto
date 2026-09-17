@@ -119,6 +119,8 @@ export type TaskPhoto = {
   task_id: string;
   photo_url: string;
   photo_type: PhotoType;
+  /** Nome original do ficheiro (imagens / PDF) */
+  file_name: string | null;
   uploaded_at: string;
 };
 
