@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ExternalLink, Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Eye, Paperclip, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type {
   Client,
@@ -46,7 +46,9 @@ import {
   assessTeamAvailability,
 } from "@/lib/team-availability";
 import { createClientFromTask } from "@/app/(app)/clients/actions";
-import { deleteTask, upsertTask, type ActionResult } from "./actions";
+import { deleteTask, deleteTaskAttachment, upsertTask, type ActionResult } from "./actions";
+import type { AttachmentItem } from "@/components/tech/attachment-grid";
+import { AttachmentGrid } from "@/components/tech/attachment-grid";
 import { cn } from "@/lib/utils";
 
 const initial: ActionResult | null = null;
@@ -63,6 +65,7 @@ type Props = {
   teams: Team[];
   collaborators: Collaborator[];
   memberships: TeamMember[];
+  attachmentsByTask?: Record<string, AttachmentItem[]>;
 };
 
 function TaskFormFields({
@@ -73,6 +76,9 @@ function TaskFormFields({
   memberships,
   allTasks,
   onClientsChange,
+  attachments,
+  onRemoveAttachment,
+  removingAttachmentId,
 }: {
   task?: TaskRow | null;
   clients: Client[];
@@ -81,6 +87,9 @@ function TaskFormFields({
   memberships: TeamMember[];
   allTasks: TaskRow[];
   onClientsChange: (clients: Client[]) => void;
+  attachments: AttachmentItem[];
+  onRemoveAttachment?: (id: string) => void;
+  removingAttachmentId?: string | null;
 }) {
   const [clientList, setClientList] = useState(clients);
   const [clientMode, setClientMode] = useState<"existing" | "new">(
@@ -700,6 +709,18 @@ function TaskFormFields({
 
       <div className="space-y-1.5">
         <Label htmlFor="admin_photos">Anexos do serviço (opcional)</Label>
+        {attachments.length > 0 && (
+          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+            <p className="text-xs font-medium text-slate-600">
+              Já enviados ({attachments.length}) — podes abrir ou remover
+            </p>
+            <AttachmentGrid
+              items={attachments}
+              onRemove={onRemoveAttachment}
+              removingId={removingAttachmentId}
+            />
+          </div>
+        )}
         <input
           id="admin_photos"
           name="admin_photos"
@@ -737,10 +758,15 @@ export function TasksManager({
   teams,
   collaborators,
   memberships,
+  attachmentsByTask: initialAttachments = {},
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [clients, setClients] = useState(initialClients);
+  const [attachmentsByTask, setAttachmentsByTask] = useState(initialAttachments);
+  const [removingAttachmentId, setRemovingAttachmentId] = useState<string | null>(
+    null,
+  );
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
   const [open, setOpen] = useState(false);
@@ -750,6 +776,10 @@ export function TasksManager({
   useEffect(() => {
     setClients(initialClients);
   }, [initialClients]);
+
+  useEffect(() => {
+    setAttachmentsByTask(initialAttachments);
+  }, [initialAttachments]);
 
   useEffect(() => {
     const editId = searchParams.get("edit");
@@ -815,6 +845,25 @@ export function TasksManager({
     const result = await deleteTask(id);
     if (!result.ok) alert(result.error);
     else router.refresh();
+  }
+
+  async function onRemoveAttachment(photoId: string) {
+    if (!confirm("Remover este anexo da intervenção?")) return;
+    setRemovingAttachmentId(photoId);
+    const result = await deleteTaskAttachment(photoId);
+    setRemovingAttachmentId(null);
+    if (!result.ok) {
+      alert(result.error);
+      return;
+    }
+    setAttachmentsByTask((prev) => {
+      const next: Record<string, AttachmentItem[]> = {};
+      for (const [taskId, list] of Object.entries(prev)) {
+        next[taskId] = list.filter((p) => p.id !== photoId);
+      }
+      return next;
+    });
+    router.refresh();
   }
 
   return (
@@ -895,6 +944,12 @@ export function TasksManager({
                       status={task.status}
                       serviceType={task.service_type}
                     />
+                    {(attachmentsByTask[task.id]?.length ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        <Paperclip className="h-3 w-3" />
+                        {attachmentsByTask[task.id].length}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-slate-500">
                     {task.clients?.name ?? "Sem cliente"}
@@ -994,6 +1049,13 @@ export function TasksManager({
             memberships={memberships}
             allTasks={tasks}
             onClientsChange={setClients}
+            attachments={
+              editing?.id ? (attachmentsByTask[editing.id] ?? []) : []
+            }
+            onRemoveAttachment={
+              editing?.id ? onRemoveAttachment : undefined
+            }
+            removingAttachmentId={removingAttachmentId}
           />
           {state && !state.ok && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">

@@ -4,10 +4,12 @@ import type {
   Client,
   Collaborator,
   Task,
+  TaskPhoto,
   Team,
   TeamMember,
 } from "@/types/database";
 import { TasksManager } from "./tasks-manager";
+import type { AttachmentItem } from "@/components/tech/attachment-grid";
 
 export const metadata = { title: "Intervenções" };
 
@@ -47,14 +49,43 @@ export default async function TasksPage() {
     );
   }
 
+  const tasks = (tasksRes.data ?? []) as Task[];
+  const taskIds = tasks.map((t) => t.id);
+
+  const attachmentsByTask: Record<string, AttachmentItem[]> = {};
+  if (taskIds.length > 0) {
+    const { data: photoRows } = await supabase
+      .from("task_photos")
+      .select("*")
+      .in("task_id", taskIds)
+      .order("uploaded_at", { ascending: false });
+
+    const photos = (photoRows ?? []) as TaskPhoto[];
+    await Promise.all(
+      photos.map(async (p) => {
+        const { data } = await supabase.storage
+          .from("task-photos")
+          .createSignedUrl(p.photo_url, 60 * 60);
+        const item: AttachmentItem = {
+          ...p,
+          signedUrl: data?.signedUrl ?? null,
+        };
+        const list = attachmentsByTask[p.task_id] ?? [];
+        list.push(item);
+        attachmentsByTask[p.task_id] = list;
+      }),
+    );
+  }
+
   return (
     <Suspense fallback={<div className="text-sm text-slate-500">A carregar…</div>}>
       <TasksManager
-        tasks={(tasksRes.data ?? []) as Task[]}
+        tasks={tasks as Task[]}
         clients={(clientsRes.data ?? []) as Client[]}
         teams={(teamsRes.data ?? []) as Team[]}
         collaborators={(collabRes.data ?? []) as Collaborator[]}
         memberships={(membersRes.data ?? []) as TeamMember[]}
+        attachmentsByTask={attachmentsByTask}
       />
     </Suspense>
   );

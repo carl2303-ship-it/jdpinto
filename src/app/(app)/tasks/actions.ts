@@ -316,3 +316,41 @@ export async function uploadTaskPhoto(
   revalidatePath("/tasks");
   return { ok: true };
 }
+
+/** Remove anexo (storage + registo) — apenas escritório. */
+export async function deleteTaskAttachment(
+  photoId: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const { data: photo, error: loadError } = await supabase
+    .from("task_photos")
+    .select("id, task_id, photo_url")
+    .eq("id", photoId)
+    .maybeSingle();
+
+  if (loadError || !photo) {
+    return { ok: false, error: "Anexo não encontrado." };
+  }
+
+  const { error: storageError } = await supabase.storage
+    .from("task-photos")
+    .remove([photo.photo_url]);
+
+  if (storageError) {
+    return { ok: false, error: storageError.message };
+  }
+
+  const { error } = await supabase
+    .from("task_photos")
+    .delete()
+    .eq("id", photoId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tech/${photo.task_id}`);
+  revalidatePath("/tech");
+  revalidatePath("/calendar");
+  return { ok: true };
+}
