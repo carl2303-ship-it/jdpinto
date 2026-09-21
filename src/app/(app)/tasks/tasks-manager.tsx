@@ -38,6 +38,7 @@ import {
   formatClientAddress,
   formatDateTime,
   formatDurationMinutes,
+  isoToLocalDate,
   mapsUrl,
 } from "@/lib/forms";
 import { DateTime24Fields } from "@/components/ui/date-time-24";
@@ -283,7 +284,7 @@ function TaskFormFields({
 
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Label>Cliente *</Label>
+          <Label>Cliente</Label>
           <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium">
             <button
               type="button"
@@ -329,10 +330,9 @@ function TaskFormFields({
               id="client_id"
               name="client_id"
               value={clientId}
-              required
               onChange={(e) => setClientId(e.target.value)}
             >
-              <option value="">— Escolher cliente —</option>
+              <option value="">— Sem cliente —</option>
               {filteredClients.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -769,6 +769,7 @@ export function TasksManager({
   );
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
+  const [dateFilter, setDateFilter] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<TaskRow | null>(null);
   const [state, action, pending] = useActionState(upsertTask, initial);
@@ -830,6 +831,12 @@ export function TasksManager({
   const filtered = useMemo(() => {
     return tasks.filter((t) => {
       if (statusFilter !== "all" && t.status !== statusFilter) return false;
+      if (dateFilter) {
+        const day =
+          t.scheduled_date?.slice(0, 10) ||
+          (t.scheduled_at ? isoToLocalDate(t.scheduled_at) : "");
+        if (day !== dateFilter) return false;
+      }
       const q = query.toLowerCase();
       if (!q) return true;
       return (
@@ -838,7 +845,7 @@ export function TasksManager({
         (t.address ?? "").toLowerCase().includes(q)
       );
     });
-  }, [tasks, query, statusFilter]);
+  }, [tasks, query, statusFilter, dateFilter]);
 
   async function onDelete(id: string) {
     if (!confirm("Eliminar esta intervenção?")) return;
@@ -893,11 +900,33 @@ export function TasksManager({
       <Card>
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
-          <CardDescription>Estado e pesquisa por cliente/título.</CardDescription>
+          <CardDescription>
+            Data, estado e pesquisa por cliente/título.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row">
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="space-y-1.5 sm:w-44">
+            <Label htmlFor="filter_date">Data</Label>
+            <Input
+              id="filter_date"
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+            />
+          </div>
+          {dateFilter ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="sm:mb-0.5"
+              onClick={() => setDateFilter("")}
+            >
+              Todas as datas
+            </Button>
+          ) : null}
           <Input
-            className="flex-1"
+            className="flex-1 min-w-[12rem]"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Pesquisar…"
@@ -924,6 +953,9 @@ export function TasksManager({
           <CardTitle>Lista</CardTitle>
           <CardDescription>
             {filtered.length} intervenção(ões)
+            {dateFilter
+              ? ` · ${dateFilter.split("-").reverse().join("/")}`
+              : ""}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -1036,7 +1068,7 @@ export function TasksManager({
         open={open}
         onClose={closeDialog}
         title={editing ? "Editar intervenção" : "Nova intervenção"}
-        description="Cliente, tipo de serviço, agendamento, imagens e equipa."
+        description="Tipo de serviço, agendamento, cliente (opcional), imagens e equipa."
         className="sm:max-w-xl"
       >
         <form action={action} className="space-y-4">

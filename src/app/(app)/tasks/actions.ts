@@ -107,9 +107,6 @@ export async function upsertTask(
   if (!payload.title) {
     return { ok: false, error: "O título é obrigatório." };
   }
-  if (!payload.client_id) {
-    return { ok: false, error: "Seleciona ou cria um cliente." };
-  }
 
   if (serviceTypeRequiresSlot(payload.service_type)) {
     if (!payload.scheduled_date || !payload.scheduled_at) {
@@ -138,18 +135,24 @@ export async function upsertTask(
     payload.scheduled_at = null;
   }
 
-  // Morada e contactos vêm sempre do cliente
-  const { data: client } = await supabase
-    .from("clients")
-    .select("street, postal_code, locality, address, phone, contact_name")
-    .eq("id", payload.client_id)
-    .maybeSingle();
-  if (!client) {
-    return { ok: false, error: "Cliente não encontrado." };
+  // Morada e contactos vêm do cliente, se houver
+  if (payload.client_id) {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("street, postal_code, locality, address, phone, contact_name")
+      .eq("id", payload.client_id)
+      .maybeSingle();
+    if (!client) {
+      return { ok: false, error: "Cliente não encontrado." };
+    }
+    payload.address = formatClientAddress(client);
+    payload.contact_phone = client.phone;
+    payload.contact_name = client.contact_name;
+  } else {
+    payload.address = null;
+    payload.contact_phone = null;
+    payload.contact_name = null;
   }
-  payload.address = formatClientAddress(client);
-  payload.contact_phone = client.phone;
-  payload.contact_name = client.contact_name;
 
   let previousAssignee: {
     assigned_collaborator_id: string | null;
