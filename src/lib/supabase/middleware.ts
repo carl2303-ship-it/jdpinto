@@ -8,6 +8,7 @@ const OFFICE_ONLY = [
   "/clients",
   "/tasks",
   "/team",
+  "/pendentes",
   "/a-faturar",
   "/terminadas",
   "/billing",

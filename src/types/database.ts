@@ -6,8 +6,8 @@ export type TaskStatus =
   | "completed"
   | "cancelled";
 
-/** Após conclusão: revisão admin → faturar → terminada */
-export type TaskOfficeStage = "active" | "to_invoice" | "done";
+/** Após conclusão: revisão admin → pendentes / faturar → terminada */
+export type TaskOfficeStage = "active" | "pending" | "to_invoice" | "done";
 
 /** Tipo de marcação / prioridade do serviço */
 export type TaskServiceType =
@@ -107,7 +107,7 @@ export type Task = {
   reminder_10_sent_at: string | null;
   /**
    * Fluxo escritório após conclusão:
-   * active → Intervenções; to_invoice → A faturar; done → Terminadas
+   * active → Intervenções; pending → Pendentes; to_invoice → A faturar; done → Terminadas
    */
   office_stage: TaskOfficeStage;
   created_at: string;
@@ -165,6 +165,7 @@ export function taskChipColor(task: {
 
 export const TASK_OFFICE_STAGE_LABELS: Record<TaskOfficeStage, string> = {
   active: "Em intervenções",
+  pending: "Pendente",
   to_invoice: "A faturar",
   done: "Terminada",
 };
@@ -214,6 +215,7 @@ export const ROLE_LABELS: Record<CollaboratorRole, string> = {
 export type TaskOpenFrom =
   | "tasks"
   | "calendar"
+  | "pendentes"
   | "a-faturar"
   | "terminadas"
   | "tech";
@@ -232,6 +234,8 @@ export function closeTaskHref(
       return "/calendar";
     case "tasks":
       return "/tasks";
+    case "pendentes":
+      return "/pendentes";
     case "a-faturar":
       return "/a-faturar";
     case "terminadas":

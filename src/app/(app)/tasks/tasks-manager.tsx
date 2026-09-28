@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ExternalLink, Eye, Paperclip, Pencil, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Eye, Paperclip, Pencil, Plus, Trash2, CheckSquare, Hourglass } from "lucide-react";
 import Link from "next/link";
 import type {
   Client,
@@ -48,6 +48,7 @@ import {
 } from "@/lib/team-availability";
 import { createClientFromTask } from "@/app/(app)/clients/actions";
 import { deleteTask, deleteTaskAttachment, upsertTask, type ActionResult } from "./actions";
+import { markTaskPending, markTaskViewed } from "@/app/(app)/billing/actions";
 import type { AttachmentItem } from "@/components/tech/attachment-grid";
 import { AttachmentGrid } from "@/components/tech/attachment-grid";
 import { cn } from "@/lib/utils";
@@ -767,6 +768,7 @@ export function TasksManager({
   const [removingAttachmentId, setRemovingAttachmentId] = useState<string | null>(
     null,
   );
+  const [stageBusyId, setStageBusyId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
   const [dateFilter, setDateFilter] = useState("");
@@ -871,6 +873,42 @@ export function TasksManager({
       return next;
     });
     router.refresh();
+  }
+
+  async function onMarkViewed(taskId: string) {
+    if (
+      !confirm(
+        "Marcar relatório como visto? A tarefa sai de Intervenções e vai para A faturar.",
+      )
+    ) {
+      return;
+    }
+    setStageBusyId(taskId);
+    const r = await markTaskViewed(taskId);
+    setStageBusyId(null);
+    if (!r.ok) alert(r.error);
+    else {
+      router.push("/a-faturar");
+      router.refresh();
+    }
+  }
+
+  async function onMarkPending(taskId: string) {
+    if (
+      !confirm(
+        "Marcar como pendente? A tarefa sai de Intervenções e vai para Pendentes.",
+      )
+    ) {
+      return;
+    }
+    setStageBusyId(taskId);
+    const r = await markTaskPending(taskId);
+    setStageBusyId(null);
+    if (!r.ok) alert(r.error);
+    else {
+      router.push("/pendentes");
+      router.refresh();
+    }
   }
 
   return (
@@ -1025,13 +1063,39 @@ export function TasksManager({
                     </a>
                   )}
                   {task.status === "completed" ? (
-                    <Link
-                      href={taskDetailHref(task.id, "tasks")}
-                      className="inline-flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-brand-navy hover:bg-slate-50"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      Ver
-                    </Link>
+                    <>
+                      <Link
+                        href={taskDetailHref(task.id, "tasks")}
+                        className="inline-flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-brand-navy hover:bg-slate-50"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Ver
+                      </Link>
+                      {(task.office_stage ?? "active") === "active" && (
+                        <>
+                          <Button
+                            type="button"
+                            variant="success"
+                            size="sm"
+                            disabled={stageBusyId === task.id}
+                            onClick={() => void onMarkViewed(task.id)}
+                          >
+                            <CheckSquare className="h-3.5 w-3.5" />
+                            Vista!
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={stageBusyId === task.id}
+                            onClick={() => void onMarkPending(task.id)}
+                          >
+                            <Hourglass className="h-3.5 w-3.5" />
+                            Pendente
+                          </Button>
+                        </>
+                      )}
+                    </>
                   ) : (
                     <Button
                       type="button"

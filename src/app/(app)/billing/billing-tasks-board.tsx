@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpDown, Eye, Receipt } from "lucide-react";
+import { ArrowUpDown, CheckSquare, Eye, Receipt } from "lucide-react";
 import type { Client, Collaborator, Task, Team } from "@/types/database";
 import {
   TaskStateBadge,
@@ -21,7 +21,11 @@ import {
 } from "@/components/ui/card";
 import { formatDateTime, formatDurationMinutes } from "@/lib/forms";
 import { taskDetailHref } from "@/types/database";
-import { markTaskInvoiced, markTaskToInvoice } from "./actions";
+import {
+  markTaskInvoiced,
+  markTaskToInvoice,
+  markTaskViewed,
+} from "./actions";
 
 export type BillingTaskRow = Task & {
   clients?: Pick<Client, "id" | "name"> | null;
@@ -32,12 +36,18 @@ export type BillingTaskRow = Task & {
 type SortKey = "date_desc" | "date_asc" | "name_asc" | "name_desc" | "client_asc";
 
 type Props = {
-  mode: "to_invoice" | "done";
+  mode: "pending" | "to_invoice" | "done";
   tasks: BillingTaskRow[];
 };
 
 function taskDateKey(t: BillingTaskRow) {
   return t.end_time ?? t.scheduled_at ?? t.scheduled_date ?? t.created_at;
+}
+
+function fromForMode(mode: Props["mode"]) {
+  if (mode === "pending") return "pendentes" as const;
+  if (mode === "to_invoice") return "a-faturar" as const;
+  return "terminadas" as const;
 }
 
 export function BillingTasksBoard({ mode, tasks }: Props) {
@@ -116,6 +126,21 @@ export function BillingTasksBoard({ mode, tasks }: Props) {
     if (!confirm("Voltar esta tarefa para A faturar?")) return;
     startTransition(async () => {
       const r = await markTaskToInvoice(id);
+      if (!r.ok) alert(r.error);
+      else router.refresh();
+    });
+  }
+
+  async function onViewed(id: string) {
+    if (
+      !confirm(
+        "Marcar relatório como visto? A tarefa vai para A faturar.",
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const r = await markTaskViewed(id);
       if (!r.ok) alert(r.error);
       else router.refresh();
     });
@@ -219,16 +244,24 @@ export function BillingTasksBoard({ mode, tasks }: Props) {
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <Link
-                    href={taskDetailHref(
-                      task.id,
-                      mode === "to_invoice" ? "a-faturar" : "terminadas",
-                    )}
+                    href={taskDetailHref(task.id, fromForMode(mode))}
                     className="inline-flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-brand-navy hover:bg-slate-50"
                   >
                     <Eye className="h-3.5 w-3.5" />
                     Ver
                   </Link>
-                  {mode === "to_invoice" ? (
+                  {mode === "pending" ? (
+                    <Button
+                      type="button"
+                      variant="success"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => void onViewed(task.id)}
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      Vista!
+                    </Button>
+                  ) : mode === "to_invoice" ? (
                     <Button
                       type="button"
                       variant="success"

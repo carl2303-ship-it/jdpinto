@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   CheckSquare,
   History,
+  Hourglass,
   MapPin,
   Navigation,
   Phone,
@@ -41,7 +42,7 @@ import {
   uploadTechPhotos,
   type ActionResult,
 } from "@/app/(app)/tech/actions";
-import { markTaskViewed } from "@/app/(app)/billing/actions";
+import { markTaskPending, markTaskViewed } from "@/app/(app)/billing/actions";
 import { isPdfFile } from "@/lib/attachments";
 
 type ClientInfo = Pick<
@@ -60,7 +61,7 @@ type Props = {
   task: Task & { client: ClientInfo | null };
   photos: Array<TaskPhoto & { signedUrl?: string | null }>;
   isOffice?: boolean;
-  /** Origem da abertura: tasks | calendar | a-faturar | terminadas | tech */
+  /** Origem da abertura: tasks | calendar | pendentes | a-faturar | terminadas | tech */
   from?: string | null;
 };
 
@@ -83,7 +84,9 @@ export function TechTaskDetail({
     initial,
   );
   const [previews, setPreviews] = useState<string[]>([]);
-  const [viewPending, setViewPending] = useState(false);
+  const [stagePending, setStagePending] = useState<"view" | "pending" | null>(
+    null,
+  );
 
   const clientName = task.client?.name ?? "Sem cliente";
   const address =
@@ -220,30 +223,65 @@ export function TechTaskDetail({
       <div className="flex flex-wrap gap-2">
         {isOffice &&
           task.status === "completed" &&
-          (task.office_stage ?? "active") === "active" && (
+          ((task.office_stage ?? "active") === "active" ||
+            task.office_stage === "pending") && (
             <Button
               type="button"
               variant="success"
-              disabled={viewPending}
+              disabled={stagePending !== null}
               onClick={async () => {
                 if (
                   !confirm(
-                    "Marcar relatório como visto? A tarefa sai de Intervenções e vai para A faturar.",
+                    "Marcar relatório como visto? A tarefa vai para A faturar.",
                   )
                 ) {
                   return;
                 }
-                setViewPending(true);
+                setStagePending("view");
                 const r = await markTaskViewed(task.id);
-                setViewPending(false);
+                setStagePending(null);
                 if (!r.ok) alert(r.error);
                 else router.push("/a-faturar");
               }}
             >
               <CheckSquare className="h-4 w-4" />
-              {viewPending ? "A guardar…" : "Vista!"}
+              {stagePending === "view" ? "A guardar…" : "Vista!"}
             </Button>
           )}
+        {isOffice &&
+          task.status === "completed" &&
+          (task.office_stage ?? "active") === "active" && (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={stagePending !== null}
+              onClick={async () => {
+                if (
+                  !confirm(
+                    "Marcar como pendente? A tarefa sai de Intervenções e vai para Pendentes.",
+                  )
+                ) {
+                  return;
+                }
+                setStagePending("pending");
+                const r = await markTaskPending(task.id);
+                setStagePending(null);
+                if (!r.ok) alert(r.error);
+                else router.push("/pendentes");
+              }}
+            >
+              <Hourglass className="h-4 w-4" />
+              {stagePending === "pending" ? "A guardar…" : "Pendente"}
+            </Button>
+          )}
+        {isOffice && task.office_stage === "pending" && (
+          <Link
+            href="/pendentes"
+            className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Em Pendentes
+          </Link>
+        )}
         {isOffice && task.office_stage === "to_invoice" && (
           <Link
             href="/a-faturar"

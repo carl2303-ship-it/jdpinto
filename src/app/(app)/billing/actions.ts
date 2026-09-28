@@ -45,6 +45,7 @@ async function setOfficeStage(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/tasks");
+  revalidatePath("/pendentes");
   revalidatePath("/a-faturar");
   revalidatePath("/terminadas");
   revalidatePath(`/tech/${taskId}`);
@@ -52,7 +53,12 @@ async function setOfficeStage(
   return { ok: true };
 }
 
-/** Admin viu o relatório → sai de Intervenções e vai para A faturar */
+/** Admin marca como pendente → sai de Intervenções e vai para Pendentes */
+export async function markTaskPending(taskId: string): Promise<ActionResult> {
+  return setOfficeStage(taskId, "pending", true);
+}
+
+/** Admin viu o relatório → sai de Intervenções/Pendentes e vai para A faturar */
 export async function markTaskViewed(taskId: string): Promise<ActionResult> {
   return setOfficeStage(taskId, "to_invoice", true);
 }
